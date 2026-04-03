@@ -3,9 +3,30 @@ import SwiftUI
 struct ContentView: View {
     @Environment(PingService.self) private var pingService
     @Environment(PingStore.self) private var pingStore
+    @Environment(RouterService.self) private var routerService
+    @Environment(RouterStore.self) private var routerStore
     @State private var selectedDate = Date()
 
     var body: some View {
+        TabView {
+            connectivityTab
+                .tabItem {
+                    Label("Connectivity", systemImage: "wifi")
+                }
+
+            RouterView()
+                .tabItem {
+                    Label("Router", systemImage: "wifi.router")
+                }
+        }
+        .frame(minWidth: 700, minHeight: 500)
+        .onAppear {
+            pingService.start(store: pingStore)
+            routerService.start(store: routerStore)
+        }
+    }
+
+    private var connectivityTab: some View {
         VStack(spacing: 0) {
             StatusBarView(selectedDate: selectedDate)
                 .padding()
@@ -20,10 +41,6 @@ struct ContentView: View {
 
             LatencyChartView(selectedDate: selectedDate)
                 .padding()
-        }
-        .frame(minWidth: 700, minHeight: 500)
-        .onAppear {
-            pingService.start(store: pingStore)
         }
     }
 }
