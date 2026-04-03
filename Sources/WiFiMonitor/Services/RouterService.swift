@@ -131,8 +131,22 @@ final class RouterService {
 
     func testConnection(host: String, username: String, password: String) async -> String? {
         do {
-            let t = try await authenticate(host: host, username: username, password: password)
-            return t != nil ? nil : "No token returned"
+            let cleanHost = host.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let url = URL(string: "http://\(cleanHost)/login.cgi") else { return "Invalid URL for host: '\(host)'" }
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+            request.setValue("asusrouter-Android-DUTUtil-1.0.0.245", forHTTPHeaderField: "User-Agent")
+            let credentials = Data("\(username):\(password)".utf8).base64EncodedString()
+            request.httpBody = "login_authorization=\(credentials)".data(using: .utf8)
+
+            let (data, _) = try await session.data(for: request)
+            let responseStr = String(data: data, encoding: .utf8) ?? "(no body)"
+            if responseStr.contains("asus_token") {
+                let t = try await authenticate(host: host, username: username, password: password)
+                return t != nil ? nil : "Token parse failed. Response: \(responseStr.prefix(100))"
+            }
+            return "No token in response: \(responseStr.prefix(150))"
         } catch {
             return error.localizedDescription
         }
@@ -188,7 +202,8 @@ final class RouterService {
     }
 
     private func authenticate(host: String, username: String, password: String) async throws -> String? {
-        guard let url = URL(string: "http://\(host)/login.cgi") else { return nil }
+        let cleanHost = host.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: "http://\(cleanHost)/login.cgi") else { return nil }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
@@ -220,7 +235,8 @@ final class RouterService {
         var combined = ""
 
         for hook in hooks {
-            guard let url = URL(string: "http://\(host)/appGet.cgi") else { continue }
+            let cleanHost = host.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let url = URL(string: "http://\(cleanHost)/appGet.cgi") else { continue }
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
