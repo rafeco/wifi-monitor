@@ -16,7 +16,7 @@ struct WiFiSignalChartView: View {
     private var snapshots: [WiFiSnapshot] {
         // Access updateCount to trigger re-render when new data arrives
         let _ = wifiStore.updateCount
-        return wifiStore.snapshots(for: selectedDate)
+        return wifiStore.snapshots(for: selectedDate).filter { $0.rssi != 0 }
     }
 
     private var buckets: [WiFiSignalBucket] {
