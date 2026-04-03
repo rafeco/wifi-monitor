@@ -1,6 +1,15 @@
 import SwiftUI
 import Charts
 
+struct ChartBucket: Identifiable {
+    let id = UUID()
+    let timestamp: Date
+    let avgLatency: Double
+    let maxLatency: Double
+    let connection: String
+    let hadFailure: Bool
+}
+
 struct LatencyChartView: View {
     let selectedDate: Date
     @Environment(PingStore.self) private var pingStore
@@ -9,21 +18,45 @@ struct LatencyChartView: View {
         pingStore.records(for: selectedDate)
     }
 
-    private var maxLatency: Double {
-        let maxRecorded = records.compactMap(\.latencyMs).max() ?? 100
+    /// Most common known connection name for the day, used as fallback for nil records
+    private var primaryConnection: String {
+        let known = records.compactMap(\.connection)
+        guard !known.isEmpty else { return "Unknown" }
+        let counts = Dictionary(grouping: known, by: { $0 }).mapValues(\.count)
+        return PingRecord(success: true, connection: counts.max(by: { $0.value < $1.value })!.key).shortConnection
+    }
+
+    /// Aggregate records into 5-minute buckets
+    private var buckets: [ChartBucket] {
+        let calendar = Calendar.current
+        let grouped = Dictionary(grouping: records) { record -> Date in
+            let comps = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: record.timestamp)
+            let roundedMinute = (comps.minute! / 5) * 5
+            return calendar.date(from: DateComponents(
+                year: comps.year, month: comps.month, day: comps.day,
+                hour: comps.hour, minute: roundedMinute
+            ))!
+        }
+        return grouped.map { (timestamp, records) in
+            let latencies = records.compactMap(\.latencyMs)
+            let avg = latencies.isEmpty ? 0 : latencies.reduce(0, +) / Double(latencies.count)
+            let max = latencies.max() ?? 0
+            let hadFailure = records.contains { !$0.success }
+            // Use most common connection in bucket, falling back to primary
+            let connCounts = Dictionary(grouping: records, by: { $0.shortConnection }).mapValues(\.count)
+            var conn = connCounts.max(by: { $0.value < $1.value })?.key ?? primaryConnection
+            if conn == "Unknown" { conn = primaryConnection }
+            return ChartBucket(timestamp: timestamp, avgLatency: avg, maxLatency: max, connection: conn, hadFailure: hadFailure)
+        }.sorted { $0.timestamp < $1.timestamp }
+    }
+
+    private var chartMax: Double {
+        let maxRecorded = buckets.map(\.maxLatency).max() ?? 100
         return max(maxRecorded * 1.2, 100)
     }
 
-    private var successRecords: [PingRecord] {
-        records.filter { $0.success && $0.latencyMs != nil }
-    }
-
-    private var failureRecords: [PingRecord] {
-        records.filter { !$0.success }
-    }
-
     private var connections: [String] {
-        Array(Set(records.compactMap(\.connection).map { PingRecord(success: true, connection: $0).shortConnection })).sorted()
+        Array(Set(buckets.map(\.connection))).sorted()
     }
 
     var body: some View {
@@ -52,51 +85,37 @@ struct LatencyChartView: View {
                     }
                 }
 
-                Chart {
-                    RuleMark(y: .value("Good", 50))
-                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 5]))
-                        .foregroundStyle(.green.opacity(0.4))
-
-                    RuleMark(y: .value("Slow", 200))
-                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 5]))
-                        .foregroundStyle(.orange.opacity(0.4))
-
-                    ForEach(successRecords) { record in
-                        BarMark(
-                            x: .value("Time", record.timestamp),
-                            y: .value("Latency", record.latencyMs ?? 0)
-                        )
-                        .foregroundStyle(connectionColor(for: record.shortConnection))
-                    }
-
-                    ForEach(failureRecords) { record in
-                        PointMark(
-                            x: .value("Time", record.timestamp),
-                            y: .value("Latency", maxLatency)
-                        )
-                        .foregroundStyle(.red)
-                        .symbolSize(40)
-                        .symbol(.cross)
+                Chart(buckets) { bucket in
+                    LineMark(
+                        x: .value("Time", bucket.timestamp),
+                        y: .value("Latency", bucket.avgLatency)
+                    )
+                    .foregroundStyle(by: .value("Connection", bucket.connection))
+                    .lineStyle(StrokeStyle(lineWidth: 1.5))
+                }
+                .chartForegroundStyleScale(
+                    domain: connections,
+                    range: connections.map { connectionColor(for: $0) }
+                )
+                .chartLegend(connections.count > 1 ? .visible : .hidden)
+                .chartXScale(domain: startOfDay(selectedDate)...endOfDay(selectedDate))
+                .chartYScale(domain: 0...chartMax)
+                .chartXAxis {
+                    AxisMarks(values: .stride(by: .hour, count: 2)) { _ in
+                        AxisGridLine()
+                        AxisValueLabel(format: .dateTime.hour(.defaultDigits(amPM: .abbreviated)))
                     }
                 }
-            .chartXScale(domain: startOfDay(selectedDate)...endOfDay(selectedDate))
-            .chartYScale(domain: 0...maxLatency)
-            .chartXAxis {
-                AxisMarks(values: .stride(by: .hour, count: 2)) { _ in
-                    AxisGridLine()
-                    AxisValueLabel(format: .dateTime.hour(.defaultDigits(amPM: .abbreviated)))
-                }
-            }
-            .chartYAxis {
-                AxisMarks { value in
-                    AxisGridLine()
-                    AxisValueLabel {
-                        if let v = value.as(Double.self) {
-                            Text("\(Int(v)) ms")
+                .chartYAxis {
+                    AxisMarks { value in
+                        AxisGridLine()
+                        AxisValueLabel {
+                            if let v = value.as(Double.self) {
+                                Text("\(Int(v)) ms")
+                            }
                         }
                     }
                 }
-            }
             }
         }
     }
