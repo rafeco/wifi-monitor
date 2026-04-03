@@ -37,6 +37,10 @@ Stored in `UserDefaults` (keys: `routerIP`, `routerUsername`, `routerPassword`).
 
 All in `~/Library/Application Support/WiFiMonitor/`. Ping data: `YYYY-MM-DD.json`. Router data: `router/snapshots-YYYY-MM-DD.json` and `router/events-YYYY-MM-DD.json`.
 
+## Important: keep docs in sync
+
+When changing the router integration code (`RouterService.swift`), always update `docs/router-api.md` to match. That file documents the actual API response formats, parsing gotchas, and endpoint behavior — it's the reference for anyone debugging the integration.
+
 ## Testing notes
 
 The router API response format is documented in `docs/router-api.md`. A debug response is saved to `router/debug-response.txt` on each poll for inspection.
