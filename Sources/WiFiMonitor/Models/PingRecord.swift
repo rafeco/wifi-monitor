@@ -1,6 +1,16 @@
 import Foundation
 import SwiftUI
 
+/// Strip the "ASXXXXX " prefix from org strings like "AS29852 Honest Networks, LLC"
+func shortConnectionName(_ connection: String?) -> String {
+    guard let connection else { return "Unknown" }
+    if let spaceIndex = connection.firstIndex(of: " "),
+       connection.prefix(2) == "AS" {
+        return String(connection[connection.index(after: spaceIndex)...])
+    }
+    return connection
+}
+
 struct PingRecord: Codable, Identifiable {
     let id: UUID
     let timestamp: Date
@@ -19,13 +29,7 @@ struct PingRecord: Codable, Identifiable {
     }
 
     var shortConnection: String {
-        guard let connection else { return "Unknown" }
-        // Strip the "ASXXXXX " prefix from org strings like "AS29852 Honest Networks, LLC"
-        if let spaceIndex = connection.firstIndex(of: " "),
-           connection[connection.startIndex...].prefix(2) == "AS" {
-            return String(connection[connection.index(after: spaceIndex)...])
-        }
-        return connection
+        shortConnectionName(connection)
     }
 
     var statusColor: Color {

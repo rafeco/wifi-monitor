@@ -67,7 +67,7 @@ struct RouterSectionView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     if let conn = pingService.lastConnection {
-                        let short = PingRecord(success: true, connection: conn).shortConnection
+                        let short = shortConnectionName(conn)
                         Text(short)
                             .font(.title3.bold())
                     } else {

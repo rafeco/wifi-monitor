@@ -6,7 +6,7 @@ final class PingStore {
     private let storageDir: URL
 
     init() {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
         storageDir = appSupport.appendingPathComponent("WiFiMonitor", isDirectory: true)
         try? FileManager.default.createDirectory(at: storageDir, withIntermediateDirectories: true)
         loadToday()
@@ -30,10 +30,14 @@ final class PingStore {
 
     // MARK: - File I/O
 
+    private static let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
     private func fileURL(for date: Date) -> URL {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        let name = formatter.string(from: date)
+        let name = Self.dateFormatter.string(from: date)
         return storageDir.appendingPathComponent("\(name).json")
     }
 

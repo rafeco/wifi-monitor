@@ -94,7 +94,7 @@ final class WiFiStore {
     private let decoder: JSONDecoder
 
     init() {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
         storageDir = appSupport.appendingPathComponent("WiFiMonitor/wifi", isDirectory: true)
         try? FileManager.default.createDirectory(at: storageDir, withIntermediateDirectories: true)
 
@@ -124,9 +124,13 @@ final class WiFiStore {
         return (try? decoder.decode([WiFiSnapshot].self, from: data)) ?? []
     }
 
+    private static let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
     private func fileURL(for date: Date) -> URL {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        return storageDir.appendingPathComponent("wifi-\(formatter.string(from: date)).json")
+        storageDir.appendingPathComponent("wifi-\(Self.dateFormatter.string(from: date)).json")
     }
 }

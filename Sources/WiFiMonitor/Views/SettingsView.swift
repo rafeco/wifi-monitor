@@ -3,8 +3,8 @@ import SwiftUI
 struct SettingsView: View {
     @AppStorage("routerEnabled") private var routerEnabled = true
     @AppStorage("routerIP") private var routerIP = "192.168.50.1"
-    @AppStorage("routerPassword") private var routerPassword = ""
     @AppStorage("routerUsername") private var routerUsername = "admin"
+    @State private var routerPassword = Keychain.get("routerPassword") ?? ""
     @Environment(RouterService.self) private var routerService
     @Environment(RouterStore.self) private var routerStore
     @State private var testResult: String?
@@ -20,6 +20,9 @@ struct SettingsView: View {
                 TextField("Router IP", text: $routerIP)
                 TextField("Username", text: $routerUsername)
                 SecureField("Password", text: $routerPassword)
+                    .onChange(of: routerPassword) { _, newValue in
+                        Keychain.set(newValue, for: "routerPassword")
+                    }
 
                 HStack {
                     Button("Test Connection") {

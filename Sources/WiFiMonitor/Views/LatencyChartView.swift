@@ -23,7 +23,7 @@ struct LatencyChartView: View {
         let known = records.compactMap(\.connection)
         guard !known.isEmpty else { return "Unknown" }
         let counts = Dictionary(grouping: known, by: { $0 }).mapValues(\.count)
-        return PingRecord(success: true, connection: counts.max(by: { $0.value < $1.value })!.key).shortConnection
+        return shortConnectionName(counts.max(by: { $0.value < $1.value })!.key)
     }
 
     /// Aggregate records into 5-minute buckets

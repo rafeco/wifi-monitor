@@ -48,7 +48,7 @@ struct StatusBarView: View {
                     Text(String(format: "%.0f ms", latency))
                         .font(.system(.body, design: .monospaced))
                     if let conn = pingService.lastConnection {
-                        let short = PingRecord(success: true, connection: conn).shortConnection
+                        let short = shortConnectionName(conn)
                         Text("via \(short)")
                             .font(.caption)
                             .foregroundStyle(.secondary)

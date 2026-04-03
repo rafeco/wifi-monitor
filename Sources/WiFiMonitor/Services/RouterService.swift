@@ -105,7 +105,7 @@ final class RouterService {
     func start(store: RouterStore? = nil) {
         guard !isPolling else { return }
         if let store { self.store = store }
-        let password = UserDefaults.standard.string(forKey: "routerPassword") ?? ""
+        let password = Keychain.get("routerPassword") ?? ""
         guard !password.isEmpty else {
             lastError = "No router password configured. Open Settings (⌘,) to set it up."
             return
@@ -149,7 +149,7 @@ final class RouterService {
     }
 
     private var routerPassword: String {
-        UserDefaults.standard.string(forKey: "routerPassword") ?? ""
+        Keychain.get("routerPassword") ?? ""
     }
 
     private func poll() {
@@ -170,10 +170,11 @@ final class RouterService {
 
                 // Fetch data
                 let data = try await fetchData(host: routerHost, token: token)
-                // Debug: write raw response to file for inspection
-                let debugURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+                #if DEBUG
+                let debugURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
                     .appendingPathComponent("WiFiMonitor/router/debug-response.txt")
-                try? data.write(to: debugURL, atomically: true, encoding: .utf8)
+                if let debugURL { try? data.write(to: debugURL, atomically: true, encoding: .utf8) }
+                #endif
                 parseResponse(data)
                 isConnected = true
                 lastError = nil
@@ -278,6 +279,7 @@ final class RouterService {
             txBytesPerSec: txBytesPerSec
         )
         history.append(snapshot)
+        if history.count > 1440 { history.removeFirst(history.count - 1440) }
         store?.addSnapshot(snapshot)
 
         // Detect provider changes using the WAN IP
