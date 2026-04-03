@@ -357,8 +357,8 @@ final class RouterService {
         for iface in interfaces {
             if let rxStr = extractValue(from: response, key: "\(iface)_rx") ?? extractNestedValue(from: response, object: iface, key: "rx"),
                let txStr = extractValue(from: response, key: "\(iface)_tx") ?? extractNestedValue(from: response, object: iface, key: "tx") {
-                let rxClean = rxStr.trimmingCharacters(in: .whitespaces)
-                let txClean = txStr.trimmingCharacters(in: .whitespaces)
+                let rxClean = rxStr.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "0x", with: "")
+                let txClean = txStr.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "0x", with: "")
                 // Try hex first, then decimal
                 let rx = Int64(rxClean, radix: 16) ?? Int64(rxClean) ?? 0
                 let tx = Int64(txClean, radix: 16) ?? Int64(txClean) ?? 0

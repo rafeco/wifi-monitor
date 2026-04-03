@@ -185,9 +185,9 @@ Returns cumulative byte counters per network interface in hexadecimal.
 | `WIRELESS0` | 2.4 GHz WiFi radio |
 | `WIRELESS1` | 5 GHz WiFi radio |
 
-**Important**: Values are **hexadecimal cumulative byte counters**. To get bandwidth:
+**Important**: Values are **hexadecimal cumulative byte counters** with a `0x` prefix. To get bandwidth:
 
-1. Parse hex to integer: `Int64("d30ad37f8", radix: 16)`
+1. Strip the `0x` prefix, then parse hex to integer: `Int64("d30ad37f8", radix: 16)` (note: `Int64` does **not** accept the `0x` prefix — you must remove it first)
 2. On the next poll, compute delta: `bytes_now - bytes_prev`
 3. Divide by elapsed seconds to get bytes/sec
 4. Handle counter resets (if delta is negative, treat as 0)
