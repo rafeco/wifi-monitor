@@ -188,7 +188,7 @@ final class RouterService {
     }
 
     private func authenticate(host: String, username: String, password: String) async throws -> String? {
-        let url = URL(string: "http://\(host)/login.cgi")!
+        guard let url = URL(string: "http://\(host)/login.cgi") else { return nil }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
@@ -220,7 +220,7 @@ final class RouterService {
         var combined = ""
 
         for hook in hooks {
-            let url = URL(string: "http://\(host)/appGet.cgi")!
+            guard let url = URL(string: "http://\(host)/appGet.cgi") else { continue }
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")

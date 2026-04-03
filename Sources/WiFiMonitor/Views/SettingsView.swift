@@ -57,7 +57,7 @@ struct SettingsView: View {
     private func testConnection() {
         isTesting = true
         testResult = nil
-        Task {
+        Task { @MainActor in
             let success = await routerService.testConnection(
                 host: routerIP, username: routerUsername, password: routerPassword
             )
