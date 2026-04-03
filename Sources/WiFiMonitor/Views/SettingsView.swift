@@ -4,7 +4,7 @@ struct SettingsView: View {
     @AppStorage("routerEnabled") private var routerEnabled = true
     @AppStorage("routerIP") private var routerIP = "192.168.50.1"
     @AppStorage("routerUsername") private var routerUsername = "admin"
-    @State private var routerPassword = Keychain.get("routerPassword") ?? ""
+    @AppStorage("routerPassword") private var routerPassword = ""
     @Environment(RouterService.self) private var routerService
     @Environment(RouterStore.self) private var routerStore
     @State private var testResult: String?
@@ -20,9 +20,6 @@ struct SettingsView: View {
                 TextField("Router IP", text: $routerIP)
                 TextField("Username", text: $routerUsername)
                 SecureField("Password", text: $routerPassword)
-                    .onChange(of: routerPassword) { _, newValue in
-                        Keychain.set(newValue, for: "routerPassword")
-                    }
 
                 HStack {
                     Button("Test Connection") {
@@ -58,11 +55,11 @@ struct SettingsView: View {
         isTesting = true
         testResult = nil
         Task { @MainActor in
-            let success = await routerService.testConnection(
+            let error = await routerService.testConnection(
                 host: routerIP, username: routerUsername, password: routerPassword
             )
             isTesting = false
-            testResult = success ? "Success — connected to router" : "Failed — check IP and credentials"
+            testResult = error == nil ? "Success — connected to router" : "Failed: \(error!)"
         }
     }
 }

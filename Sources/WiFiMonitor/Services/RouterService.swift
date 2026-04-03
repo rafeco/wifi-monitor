@@ -105,7 +105,7 @@ final class RouterService {
     func start(store: RouterStore? = nil) {
         guard !isPolling else { return }
         if let store { self.store = store }
-        let password = Keychain.get("routerPassword") ?? ""
+        let password = UserDefaults.standard.string(forKey: "routerPassword") ?? ""
         guard !password.isEmpty else {
             lastError = "No router password configured. Open Settings (⌘,) to set it up."
             return
@@ -129,12 +129,12 @@ final class RouterService {
         isPolling = false
     }
 
-    func testConnection(host: String, username: String, password: String) async -> Bool {
+    func testConnection(host: String, username: String, password: String) async -> String? {
         do {
             let t = try await authenticate(host: host, username: username, password: password)
-            return t != nil
+            return t != nil ? nil : "No token returned"
         } catch {
-            return false
+            return error.localizedDescription
         }
     }
 
@@ -149,7 +149,7 @@ final class RouterService {
     }
 
     private var routerPassword: String {
-        Keychain.get("routerPassword") ?? ""
+        UserDefaults.standard.string(forKey: "routerPassword") ?? ""
     }
 
     private func poll() {
