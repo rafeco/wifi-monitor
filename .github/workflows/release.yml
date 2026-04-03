@@ -67,6 +67,9 @@ jobs:
           </plist>
           PLIST
 
+      - name: Sign app bundle
+        run: codesign --force --deep --sign - WiFiMonitor.app
+
       - name: Zip app bundle
         run: ditto -c -k --keepParent WiFiMonitor.app WiFiMonitor.zip
 
