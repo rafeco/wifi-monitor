@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @AppStorage("routerEnabled") private var routerEnabled = true
     @AppStorage("routerIP") private var routerIP = "192.168.50.1"
     @AppStorage("routerPassword") private var routerPassword = ""
     @AppStorage("routerUsername") private var routerUsername = "admin"
@@ -11,6 +12,10 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            Section("Router") {
+                Toggle("Enable router monitoring", isOn: $routerEnabled)
+            }
+
             Section("Router Connection") {
                 TextField("Router IP", text: $routerIP)
                 TextField("Username", text: $routerUsername)
@@ -40,7 +45,9 @@ struct SettingsView: View {
         .padding()
         .onDisappear {
             routerService.stop()
-            routerService.start(store: routerStore)
+            if routerEnabled {
+                routerService.start(store: routerStore)
+            }
         }
     }
 

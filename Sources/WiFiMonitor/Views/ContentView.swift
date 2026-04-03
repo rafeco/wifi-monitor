@@ -5,42 +5,61 @@ struct ContentView: View {
     @Environment(PingStore.self) private var pingStore
     @Environment(RouterService.self) private var routerService
     @Environment(RouterStore.self) private var routerStore
+    @Environment(WiFiService.self) private var wifiService
+    @Environment(WiFiStore.self) private var wifiStore
+    @AppStorage("routerEnabled") private var routerEnabled = true
     @State private var selectedDate = Date()
 
     var body: some View {
-        TabView {
-            connectivityTab
-                .tabItem {
-                    Label("Connectivity", systemImage: "wifi")
-                }
+        ScrollView {
+            VStack(spacing: 0) {
+                StatusBarView(selectedDate: selectedDate)
+                    .padding()
 
-            RouterView()
-                .tabItem {
-                    Label("Router", systemImage: "wifi.router")
+                Divider()
+
+                DayNavigationView(selectedDate: $selectedDate)
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
+
+                Divider()
+
+                VStack(spacing: 16) {
+                    // -- Connectivity Section --
+                    GroupBox {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Label("Latency", systemImage: "network")
+                                .font(.headline)
+                            LatencyChartView(selectedDate: selectedDate)
+                                .frame(height: 200)
+                        }
+                    }
+
+                    GroupBox {
+                        WiFiSignalChartView(selectedDate: selectedDate)
+                    }
+
+                    // -- Router Section (conditional) --
+                    if routerEnabled {
+                        Divider()
+
+                        Text("Router")
+                            .font(.title3.bold())
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                        RouterSectionView()
+                    }
                 }
+                .padding()
+            }
         }
         .frame(minWidth: 700, minHeight: 500)
         .onAppear {
             pingService.start(store: pingStore)
-            routerService.start(store: routerStore)
-        }
-    }
-
-    private var connectivityTab: some View {
-        VStack(spacing: 0) {
-            StatusBarView(selectedDate: selectedDate)
-                .padding()
-
-            Divider()
-
-            DayNavigationView(selectedDate: $selectedDate)
-                .padding(.horizontal)
-                .padding(.vertical, 8)
-
-            Divider()
-
-            LatencyChartView(selectedDate: selectedDate)
-                .padding()
+            wifiService.start(store: wifiStore)
+            if routerEnabled {
+                routerService.start(store: routerStore)
+            }
         }
     }
 }

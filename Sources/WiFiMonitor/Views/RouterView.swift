@@ -1,52 +1,54 @@
 import SwiftUI
 import Charts
 
-struct RouterView: View {
+/// Inline router section for the single-page layout
+struct RouterSectionView: View {
     @Environment(RouterService.self) private var router
     @Environment(PingService.self) private var pingService
 
     var body: some View {
         if !router.isConnected && !router.isPolling {
-            VStack(spacing: 16) {
-                ContentUnavailableView(
-                    "Router Not Connected",
-                    systemImage: "wifi.router",
-                    description: Text(router.lastError ?? "Open Settings (⌘,) to configure your router connection.")
-                )
-                Button("Connect Now") {
-                    router.start()
+            GroupBox {
+                VStack(spacing: 12) {
+                    Text(router.lastError ?? "Router not connected. Open Settings (⌘,) to configure.")
+                        .foregroundStyle(.secondary)
+                    Button("Connect Now") {
+                        router.start()
+                    }
+                    .buttonStyle(.bordered)
                 }
-                .buttonStyle(.bordered)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
             }
         } else if !router.isConnected {
-            VStack(spacing: 12) {
-                ProgressView()
-                Text("Connecting to router...")
-                    .foregroundStyle(.secondary)
-                if let error = router.lastError {
-                    Text(error)
-                        .font(.caption)
-                        .foregroundStyle(.red)
+            GroupBox {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Connecting to router...")
+                        .foregroundStyle(.secondary)
+                    if let error = router.lastError {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
                 }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 4)
             }
         } else {
-            ScrollView {
-                VStack(spacing: 16) {
-                    providerCard
-                    wanCard
-                    HStack(spacing: 16) {
-                        cpuCard
-                        memoryCard
-                    }
-                    if router.history.count > 1 {
-                        bandwidthChart
-                        performanceChart
-                    }
-                    if !router.providerEvents.isEmpty {
-                        eventLog
-                    }
-                }
-                .padding()
+            providerCard
+            wanCard
+            HStack(spacing: 16) {
+                cpuCard
+                memoryCard
+            }
+            if router.history.count > 1 {
+                bandwidthChart
+                performanceChart
+            }
+            if !router.providerEvents.isEmpty {
+                eventLog
             }
         }
     }

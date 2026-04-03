@@ -4,6 +4,7 @@ struct StatusBarView: View {
     let selectedDate: Date
     @Environment(PingService.self) private var pingService
     @Environment(PingStore.self) private var pingStore
+    @Environment(WiFiService.self) private var wifiService
 
     private var records: [PingRecord] {
         pingStore.records(for: selectedDate)
@@ -29,6 +30,13 @@ struct StatusBarView: View {
         return .orange
     }
 
+    private var signalColor: Color {
+        guard let snap = wifiService.lastSnapshot else { return .secondary }
+        if snap.rssi > -60 { return .green }
+        if snap.rssi > -75 { return .yellow }
+        return .red
+    }
+
     var body: some View {
         HStack(spacing: 16) {
             HStack(spacing: 8) {
@@ -37,7 +45,7 @@ struct StatusBarView: View {
                     .frame(width: 12, height: 12)
 
                 if pingService.lastSuccess, let latency = pingService.lastLatency {
-                    Text(String(format: "Current: %.0f ms", latency))
+                    Text(String(format: "%.0f ms", latency))
                         .font(.system(.body, design: .monospaced))
                     if let conn = pingService.lastConnection {
                         let short = PingRecord(success: true, connection: conn).shortConnection
@@ -49,9 +57,22 @@ struct StatusBarView: View {
                     Text("Not monitoring")
                         .foregroundStyle(.secondary)
                 } else {
-                    Text("Current: Timeout")
+                    Text("Timeout")
                         .font(.system(.body, design: .monospaced))
                         .foregroundStyle(.red)
+                }
+            }
+
+            if let snap = wifiService.lastSnapshot {
+                Divider().frame(height: 16)
+                HStack(spacing: 4) {
+                    Image(systemName: "wifi")
+                        .foregroundStyle(signalColor)
+                    Text("\(snap.rssi) dBm")
+                        .font(.system(.caption, design: .monospaced))
+                    Text(snap.signalQuality)
+                        .font(.caption)
+                        .foregroundStyle(signalColor)
                 }
             }
 
