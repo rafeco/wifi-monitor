@@ -36,8 +36,14 @@ Currently supports ASUS routers running ASUSWRT firmware (tested with RT-AX58U /
 ## Building from source
 
 ```bash
-swift build
-swift run WiFiMonitor
+make run
+```
+
+This builds the binary, assembles the `.app` bundle (including the icon), and launches the app. Other targets:
+
+```bash
+make build   # build without launching
+make clean   # remove build artifacts and app bundle
 ```
 
 Or open in Xcode: `open Package.swift`
