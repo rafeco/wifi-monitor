@@ -76,6 +76,9 @@ struct StatusBarView: View {
                 }
             }
 
+            Divider().frame(height: 16)
+            FeelsLikeView()
+
             Spacer()
 
             HStack(spacing: 16) {
@@ -93,5 +96,64 @@ struct StatusBarView: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+}
+
+/// Live "feels like" indicator: a single rating that blends recent latency,
+/// jitter, and packet loss, with cause attribution distinguishing upstream
+/// (ISP) problems from local WiFi ones. Always reflects "right now" (today's
+/// most recent pings), regardless of the day being viewed elsewhere.
+struct FeelsLikeView: View {
+    @Environment(PingStore.self) private var pingStore
+    @Environment(WiFiService.self) private var wifiService
+    @Environment(RouterService.self) private var routerService
+    @AppStorage("routerEnabled") private var routerEnabled = true
+
+    private var score: FeelsLikeScore {
+        let recent = Array(pingStore.records(for: Date()).suffix(10))
+
+        let wanConnected: Bool?
+        var throughput: Double?
+        var peakThroughput: Double?
+        if routerEnabled, let wan = routerService.wanStatus {
+            // Only treat as down on an explicit disconnect; the status string
+            // format varies, so avoid false alarms from unexpected values.
+            wanConnected = !wan.status.lowercased().contains("disconnect")
+
+            if let latest = routerService.history.last {
+                throughput = latest.rxBytesPerSec + latest.txBytesPerSec
+            }
+            peakThroughput = routerService.history
+                .map { $0.rxBytesPerSec + $0.txBytesPerSec }
+                .max()
+        } else {
+            wanConnected = nil
+        }
+
+        return FeelsLikeScore.compute(
+            recentPings: recent,
+            wifi: wifiService.lastSnapshot,
+            wanConnected: wanConnected,
+            throughputBytesPerSec: throughput,
+            peakThroughputBytesPerSec: peakThroughput
+        )
+    }
+
+    var body: some View {
+        let s = score
+        HStack(spacing: 6) {
+            Image(systemName: s.rating.symbol)
+                .foregroundStyle(s.rating.color)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Feels \(s.rating.rawValue)")
+                    .font(.callout.weight(.medium))
+                if let cause = s.cause.description {
+                    Text(cause)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .help("Network feels-like score: \(s.score)/100")
     }
 }
