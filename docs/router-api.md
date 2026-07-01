@@ -8,6 +8,14 @@ The ASUS router exposes an HTTP API at its local IP (typically `192.168.50.1`). 
 
 **Important**: Each hook must be requested in a separate HTTP request. Combining multiple hooks in a single request only returns the first one.
 
+## Client connection behavior
+
+Beyond the raw API, `RouterService` decides *which* host to talk to and *when* to poll:
+
+- **Host selection.** With the "Detect router IP from current network" setting enabled (default), the host is the active interface's default gateway, read from `/sbin/route -n get default`. This adapts to DHCP changes and different networks. If detection fails, it falls back to the manually configured `routerIP` (default `192.168.50.1`). Disable the setting to always use the manual IP.
+- **Home-network gating.** The SSID of the network on which the router last connected successfully is remembered as the "home network" (`routerHomeSSID`). When the current SSID is known and differs, polling is paused (no HTTP requests) with a status like `Paused — not on home network (X). Connected to Y.` This avoids authenticating against a stranger's router that happens to share the same private IP. Gating requires the SSID to be readable, which on macOS 14+ needs Location Services authorization; without it, polling always proceeds.
+- **Token invalidation on host change.** The `asus_token` is tracked against the host it was issued for. When the host changes (manual edit or a different gateway), the token is discarded and re-authentication happens on the next poll, rather than sending a stale token to a different device.
+
 ## Authentication
 
 ### Endpoint

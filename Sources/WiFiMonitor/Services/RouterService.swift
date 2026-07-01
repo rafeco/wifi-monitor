@@ -1,4 +1,5 @@
 import Foundation
+import CoreWLAN
 
 struct WanStatus {
     var ip: String
@@ -89,11 +90,19 @@ final class RouterService {
     private var lastCpuUsage: [Int] = []
 
     private var token: String?
+    /// Host the current token was issued for; when the host changes (manual
+    /// edit or a different network's gateway) the token is invalidated.
+    private var tokenHost: String?
     private var timer: Timer?
     private let session: URLSession
     private var store: RouterStore?
 
     init() {
+        // Default to auto-detecting the router IP from the current network's
+        // gateway. Registered here so RouterService and the Settings UI agree
+        // on the default before the user has toggled anything.
+        UserDefaults.standard.register(defaults: ["routerAutoDetectIP": true])
+
         let config = URLSessionConfiguration.ephemeral
         config.timeoutIntervalForRequest = 10
         // ASUS routers use self-signed certs on HTTPS; we use HTTP
@@ -155,7 +164,52 @@ final class RouterService {
     // MARK: - Private
 
     private var routerHost: String {
-        UserDefaults.standard.string(forKey: "routerIP") ?? "192.168.50.1"
+        let manual = UserDefaults.standard.string(forKey: "routerIP") ?? "192.168.50.1"
+        // When auto-detect is on, use the current network's gateway (adapting
+        // to DHCP changes and different networks), falling back to the manual
+        // value if detection fails.
+        if UserDefaults.standard.bool(forKey: "routerAutoDetectIP") {
+            return Self.defaultGateway() ?? manual
+        }
+        return manual
+    }
+
+    /// SSID of the currently associated network, or nil if unavailable (no
+    /// Location permission, or not connected to WiFi).
+    private var currentSSID: String? {
+        CWWiFiClient.shared().interface()?.ssid()
+    }
+
+    /// The active interface's default gateway (typically the router's LAN IP),
+    /// read from the routing table. Runs quickly and synchronously; called at
+    /// most once per poll.
+    static func defaultGateway() -> String? {
+        let process = Process()
+        let pipe = Pipe()
+        process.executableURL = URL(fileURLWithPath: "/sbin/route")
+        process.arguments = ["-n", "get", "default"]
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            return nil
+        }
+        guard process.terminationStatus == 0 else { return nil }
+
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        guard let output = String(data: data, encoding: .utf8) else { return nil }
+
+        for line in output.split(separator: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("gateway:") {
+                let gw = trimmed.dropFirst("gateway:".count).trimmingCharacters(in: .whitespaces)
+                return gw.isEmpty ? nil : gw
+            }
+        }
+        return nil
     }
 
     private var routerUsername: String {
@@ -168,12 +222,29 @@ final class RouterService {
 
     private func poll() {
         Task { @MainActor in
+            // Skip polling when we know we're away from the home network — the
+            // router isn't reachable and its IP may belong to a stranger's
+            // router. Only skip when both SSIDs are known (home learned on a
+            // prior successful poll; current readable via Location permission).
+            let current = currentSSID
+            if let home = UserDefaults.standard.string(forKey: "routerHomeSSID"),
+               let current, current != home {
+                isConnected = false
+                lastError = "Paused — not on home network (\(home)). Connected to \(current)."
+                return
+            }
+
+            let host = routerHost
+            // Host changed since the token was issued — force re-auth.
+            if tokenHost != host { token = nil }
+
             do {
                 // Authenticate if needed
                 if token == nil {
                     token = try await authenticate(
-                        host: routerHost, username: routerUsername, password: routerPassword
+                        host: host, username: routerUsername, password: routerPassword
                     )
+                    tokenHost = host
                 }
 
                 guard let token else {
@@ -183,7 +254,7 @@ final class RouterService {
                 }
 
                 // Fetch data
-                let data = try await fetchData(host: routerHost, token: token)
+                let data = try await fetchData(host: host, token: token)
                 #if DEBUG
                 let debugURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
                     .appendingPathComponent("WiFiMonitor/router/debug-response.txt")
@@ -192,6 +263,11 @@ final class RouterService {
                 parseResponse(data)
                 isConnected = true
                 lastError = nil
+
+                // Learn the home network: wherever the router last connected
+                // successfully is what we compare against to pause polling
+                // elsewhere.
+                if let current { UserDefaults.standard.set(current, forKey: "routerHomeSSID") }
             } catch {
                 // Token might be expired, clear it so we re-auth next time
                 self.token = nil
