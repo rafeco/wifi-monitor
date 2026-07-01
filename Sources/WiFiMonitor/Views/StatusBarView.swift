@@ -68,6 +68,10 @@ struct StatusBarView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "wifi")
                         .foregroundStyle(signalColor)
+                    if let ssid = wifiService.currentSSID {
+                        Text(ssid)
+                            .font(.caption.weight(.medium))
+                    }
                     Text("\(snap.rssi) dBm")
                         .font(.system(.caption, design: .monospaced))
                     Text(snap.signalQuality)
@@ -123,7 +127,11 @@ struct FeelsLikeView: View {
             if let latest = routerService.history.last {
                 throughput = latest.rxBytesPerSec + latest.txBytesPerSec
             }
+            // Scope the saturation baseline to the current network session so a
+            // fast prior network's peak doesn't suppress bufferbloat detection
+            // after switching to a slower one.
             peakThroughput = routerService.history
+                .filter { $0.timestamp >= wifiService.lastNetworkChange }
                 .map { $0.rxBytesPerSec + $0.txBytesPerSec }
                 .max()
         } else {

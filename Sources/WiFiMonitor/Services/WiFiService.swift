@@ -1,6 +1,13 @@
 import Foundation
 import CoreWLAN
 
+extension Notification.Name {
+    /// Posted when the associated WiFi network (SSID) changes, so other
+    /// services can re-baseline network-relative state (ISP cache, bufferbloat
+    /// throughput peak) instead of carrying stale data across networks.
+    static let wifiNetworkChanged = Notification.Name("wifiNetworkChanged")
+}
+
 struct WiFiSnapshot: Codable, Identifiable {
     let id: UUID
     let timestamp: Date
@@ -36,13 +43,24 @@ final class WiFiService {
     var lastSnapshot: WiFiSnapshot?
     var isRunning: Bool = false
 
+    /// Name of the currently associated network, or nil if unknown. (macOS
+    /// returns nil unless the app has Location Services authorization.)
+    var currentSSID: String?
+    /// When the app last observed the network change. Consumers scope
+    /// network-relative baselines (e.g. throughput peak) to samples after this.
+    var lastNetworkChange: Date = .distantPast
+
     private var timer: Timer?
     private var store: WiFiStore?
+    private let locationPermission = LocationPermission()
 
     func start(store: WiFiStore) {
         guard !isRunning else { return }
         self.store = store
         isRunning = true
+
+        // Needed for iface.ssid() to return a name on macOS 14+.
+        locationPermission.request()
 
         sample()
 
@@ -77,12 +95,30 @@ final class WiFiService {
         default: band = "Unknown"
         }
 
+        updateNetworkIdentity(iface.ssid())
+
         let snapshot = WiFiSnapshot(
             rssi: rssi, noise: noise, txRate: txRate,
             channel: channel, band: band
         )
         lastSnapshot = snapshot
         store?.add(snapshot)
+    }
+
+    /// Track the associated SSID and announce genuine network switches. Ignores
+    /// nil/empty readings (transient disconnects, or missing Location
+    /// permission) so we don't fire spurious changes, and stays silent on the
+    /// very first observation since there's no prior network to switch from.
+    private func updateNetworkIdentity(_ ssid: String?) {
+        guard let ssid, !ssid.isEmpty else { return }
+        guard let previous = currentSSID else {
+            currentSSID = ssid
+            return
+        }
+        guard ssid != previous else { return }
+        currentSSID = ssid
+        lastNetworkChange = Date()
+        NotificationCenter.default.post(name: .wifiNetworkChanged, object: nil)
     }
 }
 

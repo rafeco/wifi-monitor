@@ -11,11 +11,18 @@ final class PingService {
     private weak var store: PingStore?
     private var cachedConnection: String?
     private var lastConnectionCheck: Date = .distantPast
+    private var networkChangeObserver: NSObjectProtocol?
 
     func start(store: PingStore) {
         guard !isRunning else { return }
         self.store = store
         isRunning = true
+
+        networkChangeObserver = NotificationCenter.default.addObserver(
+            forName: .wifiNetworkChanged, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.handleNetworkChange()
+        }
 
         performPing()
 
@@ -29,6 +36,19 @@ final class PingService {
         timer?.invalidate()
         timer = nil
         isRunning = false
+        if let networkChangeObserver {
+            NotificationCenter.default.removeObserver(networkChangeObserver)
+        }
+        networkChangeObserver = nil
+    }
+
+    /// The WiFi network changed, so the ISP almost certainly did too. Drop the
+    /// cached org and re-detect on the spot rather than showing a stale
+    /// provider for up to two minutes.
+    private func handleNetworkChange() {
+        cachedConnection = nil
+        lastConnectionCheck = .distantPast
+        performPing()
     }
 
     private func performPing() {
