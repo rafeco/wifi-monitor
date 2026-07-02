@@ -5,6 +5,7 @@ import Charts
 struct RouterSectionView: View {
     @Environment(RouterService.self) private var router
     @Environment(PingService.self) private var pingService
+    @Environment(NetworkProfileStore.self) private var profileStore
 
     var body: some View {
         if !router.isConnected && !router.isPolling {
@@ -13,7 +14,7 @@ struct RouterSectionView: View {
                     Text(router.lastError ?? "Router not connected. Open Settings (⌘,) to configure.")
                         .foregroundStyle(.secondary)
                     Button("Connect Now") {
-                        router.start()
+                        router.start(profiles: profileStore)
                     }
                     .buttonStyle(.bordered)
                 }

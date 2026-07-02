@@ -10,10 +10,11 @@ The ASUS router exposes an HTTP API at its local IP (typically `192.168.50.1`). 
 
 ## Client connection behavior
 
-Beyond the raw API, `RouterService` decides *which* host to talk to and *when* to poll:
+Beyond the raw API, `RouterService` decides *which* host to talk to and *when* to poll, driven by per-network profiles (`NetworkProfile`, keyed by SSID):
 
-- **Host selection.** With the "Detect router IP from current network" setting enabled (default), the host is the active interface's default gateway, read from `/sbin/route -n get default`. This adapts to DHCP changes and different networks. If detection fails, it falls back to the manually configured `routerIP` (default `192.168.50.1`). Disable the setting to always use the manual IP.
-- **Home-network gating.** The SSID of the network on which the router last connected successfully is remembered as the "home network" (`routerHomeSSID`). When the current SSID is known and differs, polling is paused (no HTTP requests) with a status like `Paused — not on home network (X). Connected to Y.` This avoids authenticating against a stranger's router that happens to share the same private IP. Gating requires the SSID to be readable, which on macOS 14+ needs Location Services authorization; without it, polling always proceeds.
+- **Per-network gating.** Each poll reads the profile for the current SSID. Polling proceeds only when a profile exists and has `routerEnabled`; otherwise it's paused (no HTTP requests) with a status explaining why. This avoids authenticating against a stranger's router that happens to share the same private IP. Networks are auto-discovered (added disabled) as they're joined. Identifying the SSID requires Location Services authorization on macOS 14+; without it, RouterService can't select a profile and pauses.
+- **Host selection.** With a profile's "Detect router IP from current network" enabled (default), the host is the active interface's default gateway, read from `/sbin/route -n get default`. This adapts to DHCP changes. If detection fails, it falls back to the profile's manual `routerIP`. Disable it to always use the manual IP.
+- **Credentials.** Username lives in the profile; the password is read from the Keychain (service `com.rcolburn.wifimonitor.router`, account = SSID).
 - **Token invalidation on host change.** The `asus_token` is tracked against the host it was issued for. When the host changes (manual edit or a different gateway), the token is discarded and re-authentication happens on the next poll, rather than sending a stale token to a different device.
 
 ## Authentication

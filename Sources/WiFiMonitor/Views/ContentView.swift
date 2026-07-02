@@ -7,8 +7,14 @@ struct ContentView: View {
     @Environment(RouterStore.self) private var routerStore
     @Environment(WiFiService.self) private var wifiService
     @Environment(WiFiStore.self) private var wifiStore
-    @AppStorage("routerEnabled") private var routerEnabled = true
+    @Environment(NetworkProfileStore.self) private var profileStore
     @State private var selectedDate = Date()
+
+    /// Router monitoring is shown only when the current network has an enabled profile.
+    private var routerMonitored: Bool {
+        guard let ssid = wifiService.currentSSID else { return false }
+        return profileStore.profile(for: ssid)?.routerEnabled ?? false
+    }
 
     var body: some View {
         ScrollView {
@@ -39,8 +45,8 @@ struct ContentView: View {
                         WiFiSignalChartView(selectedDate: selectedDate)
                     }
 
-                    // -- Router Section (conditional) --
-                    if routerEnabled {
+                    // -- Router Section (only when this network is monitored) --
+                    if routerMonitored {
                         Divider()
 
                         Text("Router")
@@ -57,9 +63,9 @@ struct ContentView: View {
         .onAppear {
             pingService.start(store: pingStore)
             wifiService.start(store: wifiStore)
-            if routerEnabled {
-                routerService.start(store: routerStore)
-            }
+            // Always poll; RouterService itself decides per-network whether
+            // there's anything to monitor.
+            routerService.start(store: routerStore, profiles: profileStore)
         }
     }
 }

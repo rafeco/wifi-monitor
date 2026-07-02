@@ -8,6 +8,7 @@ struct WiFiMonitorApp: App {
     let routerStore = RouterStore()
     let wifiService = WiFiService()
     let wifiStore = WiFiStore()
+    let profileStore = NetworkProfileStore()
 
     var body: some Scene {
         WindowGroup {
@@ -18,12 +19,15 @@ struct WiFiMonitorApp: App {
                 .environment(routerStore)
                 .environment(wifiService)
                 .environment(wifiStore)
+                .environment(profileStore)
         }
 
         Settings {
             SettingsView()
                 .environment(routerService)
                 .environment(routerStore)
+                .environment(wifiService)
+                .environment(profileStore)
         }
     }
 }

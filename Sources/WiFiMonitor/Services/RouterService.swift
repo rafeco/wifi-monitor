@@ -93,16 +93,12 @@ final class RouterService {
     /// Host the current token was issued for; when the host changes (manual
     /// edit or a different network's gateway) the token is invalidated.
     private var tokenHost: String?
+    private var profileStore: NetworkProfileStore?
     private var timer: Timer?
     private let session: URLSession
     private var store: RouterStore?
 
     init() {
-        // Default to auto-detecting the router IP from the current network's
-        // gateway. Registered here so RouterService and the Settings UI agree
-        // on the default before the user has toggled anything.
-        UserDefaults.standard.register(defaults: ["routerAutoDetectIP": true])
-
         let config = URLSessionConfiguration.ephemeral
         config.timeoutIntervalForRequest = 10
         // ASUS routers use self-signed certs on HTTPS; we use HTTP
@@ -111,19 +107,18 @@ final class RouterService {
 
     // MARK: - Public
 
-    func start(store: RouterStore? = nil) {
+    func start(store: RouterStore? = nil, profiles: NetworkProfileStore) {
         guard !isPolling else { return }
         if let store { self.store = store }
-        let password = UserDefaults.standard.string(forKey: "routerPassword") ?? ""
-        guard !password.isEmpty else {
-            lastError = "No router password configured. Open Settings (⌘,) to set it up."
-            return
-        }
+        self.profileStore = profiles
         // Load today's persisted history
         if let store = self.store {
             history = store.snapshots(for: Date())
             providerEvents = store.providerEvents(for: Date())
         }
+        // Always poll; each cycle decides whether the current network has an
+        // enabled profile. This lets us discover networks and pick up profile
+        // changes without restarting.
         isPolling = true
         poll()
         timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
@@ -163,15 +158,14 @@ final class RouterService {
 
     // MARK: - Private
 
-    private var routerHost: String {
-        let manual = UserDefaults.standard.string(forKey: "routerIP") ?? "192.168.50.1"
-        // When auto-detect is on, use the current network's gateway (adapting
-        // to DHCP changes and different networks), falling back to the manual
-        // value if detection fails.
-        if UserDefaults.standard.bool(forKey: "routerAutoDetectIP") {
-            return Self.defaultGateway() ?? manual
+    /// Host for a given profile: the current network's gateway when auto-detect
+    /// is on (adapting to DHCP / different networks), falling back to the
+    /// profile's manual IP if detection fails.
+    private func host(for profile: NetworkProfile) -> String {
+        if profile.autoDetectIP {
+            return Self.defaultGateway() ?? profile.routerIP
         }
-        return manual
+        return profile.routerIP
     }
 
     /// SSID of the currently associated network, or nil if unavailable (no
@@ -212,29 +206,34 @@ final class RouterService {
         return nil
     }
 
-    private var routerUsername: String {
-        UserDefaults.standard.string(forKey: "routerUsername") ?? "admin"
-    }
-
-    private var routerPassword: String {
-        UserDefaults.standard.string(forKey: "routerPassword") ?? ""
-    }
-
     private func poll() {
         Task { @MainActor in
-            // Skip polling when we know we're away from the home network — the
-            // router isn't reachable and its IP may belong to a stranger's
-            // router. Only skip when both SSIDs are known (home learned on a
-            // prior successful poll; current readable via Location permission).
-            let current = currentSSID
-            if let home = UserDefaults.standard.string(forKey: "routerHomeSSID"),
-               let current, current != home {
+            // Everything is keyed by SSID; without it (no Location permission,
+            // or not on WiFi) we can't pick a profile.
+            guard let current = currentSSID else {
                 isConnected = false
-                lastError = "Paused — not on home network (\(home)). Connected to \(current)."
+                lastError = "Grant Location Services to identify the WiFi network."
                 return
             }
 
-            let host = routerHost
+            // Surface the network in Settings even if it's not monitored yet.
+            profileStore?.discover(ssid: current)
+
+            // Only monitor networks with an enabled profile. This avoids
+            // authenticating against a stranger's router at the same private IP.
+            guard let profile = profileStore?.profile(for: current), profile.routerEnabled else {
+                isConnected = false
+                lastError = "Router monitoring is off for \(current). Enable it in Settings (⌘,)."
+                return
+            }
+
+            guard let password = profileStore?.password(for: current), !password.isEmpty else {
+                isConnected = false
+                lastError = "No router password saved for \(current). Add it in Settings (⌘,)."
+                return
+            }
+
+            let host = host(for: profile)
             // Host changed since the token was issued — force re-auth.
             if tokenHost != host { token = nil }
 
@@ -242,7 +241,7 @@ final class RouterService {
                 // Authenticate if needed
                 if token == nil {
                     token = try await authenticate(
-                        host: host, username: routerUsername, password: routerPassword
+                        host: host, username: profile.username, password: password
                     )
                     tokenHost = host
                 }
@@ -263,11 +262,6 @@ final class RouterService {
                 parseResponse(data)
                 isConnected = true
                 lastError = nil
-
-                // Learn the home network: wherever the router last connected
-                // successfully is what we compare against to pause polling
-                // elsewhere.
-                if let current { UserDefaults.standard.set(current, forKey: "routerHomeSSID") }
             } catch {
                 // Token might be expired, clear it so we re-auth next time
                 self.token = nil
