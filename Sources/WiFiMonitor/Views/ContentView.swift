@@ -66,6 +66,13 @@ struct ContentView: View {
             // Always poll; RouterService itself decides per-network whether
             // there's anything to monitor.
             routerService.start(store: routerStore, profiles: profileStore)
+            if let ssid = wifiService.currentSSID { profileStore.discover(ssid: ssid) }
+        }
+        // Record the network as soon as its name is known. The SSID may arrive
+        // after launch (Location permission resolves asynchronously), so react
+        // to it here rather than only discovering once on appear.
+        .onChange(of: wifiService.currentSSID) { _, ssid in
+            if let ssid { profileStore.discover(ssid: ssid) }
         }
     }
 }

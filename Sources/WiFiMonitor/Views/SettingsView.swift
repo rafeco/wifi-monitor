@@ -34,18 +34,23 @@ struct SettingsView: View {
             }
         }
         .frame(width: 660, height: 460)
-        .onAppear {
-            if let ssid = wifiService.currentSSID {
-                profileStore.discover(ssid: ssid)
-                if selectedSSID == nil { selectedSSID = ssid }
-            } else if selectedSSID == nil {
-                selectedSSID = profileStore.profiles.first?.ssid
-            }
-        }
+        .onAppear { selectCurrentNetwork() }
+        // The SSID may not be known yet when Settings first opens; select it
+        // once it arrives.
+        .onChange(of: wifiService.currentSSID) { _, _ in selectCurrentNetwork() }
         .onDisappear {
             // Apply any profile changes immediately.
             routerService.stop()
             routerService.start(store: routerStore, profiles: profileStore)
+        }
+    }
+
+    private func selectCurrentNetwork() {
+        if let ssid = wifiService.currentSSID {
+            profileStore.discover(ssid: ssid)
+            if selectedSSID == nil { selectedSSID = ssid }
+        } else if selectedSSID == nil {
+            selectedSSID = profileStore.profiles.first?.ssid
         }
     }
 }
