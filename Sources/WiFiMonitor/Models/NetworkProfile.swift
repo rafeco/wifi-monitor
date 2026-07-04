@@ -1,5 +1,14 @@
 import Foundation
 
+/// Whether this network's router works with our (ASUS/ASUSWRT-only) integration.
+/// `unknown` until probed; `unsupported` means we reached the gateway and it
+/// didn't look like ASUS.
+enum RouterCompatibility: String, Codable {
+    case unknown
+    case supported
+    case unsupported
+}
+
 /// Per-WiFi-network router configuration, keyed by SSID. The password is not
 /// part of this struct — it lives in the Keychain (see `Keychain`), looked up
 /// by the same SSID.
@@ -10,13 +19,30 @@ struct NetworkProfile: Codable, Identifiable {
     var autoDetectIP: Bool
     var routerIP: String
     var username: String
+    var compatibility: RouterCompatibility
 
-    init(ssid: String, routerEnabled: Bool = false, autoDetectIP: Bool = true, routerIP: String = "192.168.50.1", username: String = "admin") {
+    init(ssid: String, routerEnabled: Bool = false, autoDetectIP: Bool = true, routerIP: String = "192.168.50.1", username: String = "admin", compatibility: RouterCompatibility = .unknown) {
         self.ssid = ssid
         self.routerEnabled = routerEnabled
         self.autoDetectIP = autoDetectIP
         self.routerIP = routerIP
         self.username = username
+        self.compatibility = compatibility
+    }
+
+    // Custom decoding so profiles saved before `compatibility` existed still load.
+    private enum CodingKeys: String, CodingKey {
+        case ssid, routerEnabled, autoDetectIP, routerIP, username, compatibility
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        ssid = try c.decode(String.self, forKey: .ssid)
+        routerEnabled = try c.decode(Bool.self, forKey: .routerEnabled)
+        autoDetectIP = try c.decode(Bool.self, forKey: .autoDetectIP)
+        routerIP = try c.decode(String.self, forKey: .routerIP)
+        username = try c.decode(String.self, forKey: .username)
+        compatibility = try c.decodeIfPresent(RouterCompatibility.self, forKey: .compatibility) ?? .unknown
     }
 }
 

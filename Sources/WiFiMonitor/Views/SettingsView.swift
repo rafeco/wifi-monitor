@@ -89,22 +89,26 @@ private struct NetworkDetailView: View {
     @State private var routerIP = "192.168.50.1"
     @State private var username = "admin"
     @State private var password = ""
+    @State private var compatibility: RouterCompatibility = .unknown
+    @State private var isProbing = false
+    @State private var detectedGateway: String?
     @State private var testResult: String?
     @State private var isTesting = false
     @State private var showForgetConfirm = false
 
     /// The IP that will actually be used. The live gateway is only meaningful
-    /// for the network we're currently on.
+    /// for the network we're currently on, and is cached to avoid re-shelling
+    /// out to `route` on every render.
     private var effectiveIP: String {
         guard autoDetectIP else { return routerIP }
-        if isCurrent { return RouterService.defaultGateway() ?? routerIP }
+        if isCurrent, let detectedGateway { return detectedGateway }
         return routerIP
     }
 
     var body: some View {
         Form {
             Section {
-                Toggle("Monitor this network's router", isOn: $routerEnabled)
+                compatibilityHeader
             } header: {
                 Text(profile.ssid)
             } footer: {
@@ -113,7 +117,7 @@ private struct NetworkDetailView: View {
                 }
             }
 
-            if routerEnabled {
+            if compatibility == .supported && routerEnabled {
                 Section("Router Connection") {
                     Toggle("Detect router IP from current network", isOn: $autoDetectIP)
 
@@ -148,12 +152,27 @@ private struct NetworkDetailView: View {
             }
 
             Section {
-                Button("Save", action: save)
+                if compatibility == .supported {
+                    Button("Save", action: save)
+                }
+                if compatibility == .unsupported {
+                    Button("Configure anyway") {
+                        compatibility = .supported
+                        routerEnabled = true
+                        save()
+                    }
+                }
+                if isCurrent && !isProbing && compatibility != .unknown {
+                    Button("Re-check compatibility") { probe() }
+                }
                 Button("Forget Network", role: .destructive) { showForgetConfirm = true }
             }
         }
         .formStyle(.grouped)
-        .task { loadFromStore() }
+        .task {
+            loadFromStore()
+            if isCurrent && compatibility == .unknown { probe() }
+        }
         .confirmationDialog("Forget \(profile.ssid)?", isPresented: $showForgetConfirm) {
             Button("Forget Network", role: .destructive) {
                 profileStore.remove(ssid: profile.ssid)
@@ -163,12 +182,43 @@ private struct NetworkDetailView: View {
         }
     }
 
+    /// The first section's content depends on whether we've determined the
+    /// router is supported.
+    @ViewBuilder
+    private var compatibilityHeader: some View {
+        switch compatibility {
+        case .supported:
+            Toggle("Monitor this network's router", isOn: $routerEnabled)
+        case .unsupported:
+            Label("Unsupported router", systemImage: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+            Text("Only ASUS routers running ASUSWRT are supported, and this network's router doesn't appear to be one. Ping, WiFi signal, and the feels-like indicator still work.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        case .unknown:
+            if isProbing {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Checking router…").foregroundStyle(.secondary)
+                }
+            } else if isCurrent {
+                Button("Check router compatibility") { probe() }
+            } else {
+                Text("Connect to this network to check whether its router is supported.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
     private func loadFromStore() {
         routerEnabled = profile.routerEnabled
         autoDetectIP = profile.autoDetectIP
         routerIP = profile.routerIP
         username = profile.username
+        compatibility = profile.compatibility
         password = profileStore.password(for: profile.ssid) ?? ""
+        detectedGateway = isCurrent ? RouterService.defaultGateway() : nil
     }
 
     private func save() {
@@ -177,8 +227,21 @@ private struct NetworkDetailView: View {
         updated.autoDetectIP = autoDetectIP
         updated.routerIP = routerIP
         updated.username = username
+        updated.compatibility = compatibility
         profileStore.upsert(updated)
         profileStore.setPassword(password, for: profile.ssid)
+    }
+
+    private func probe() {
+        guard isCurrent else { return }
+        isProbing = true
+        testResult = nil
+        Task { @MainActor in
+            let result = await RouterService.probeCompatibility(host: effectiveIP)
+            compatibility = result
+            isProbing = false
+            save()
+        }
     }
 
     private func testConnection() {

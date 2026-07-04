@@ -206,6 +206,43 @@ final class RouterService {
         return nil
     }
 
+    /// Best-effort check of whether the router at `host` speaks the ASUSWRT API
+    /// this app supports. Returns `.unknown` when the gateway can't be reached
+    /// (so we don't wrongly conclude "unsupported" on a transient failure), and
+    /// `.unsupported` when it responds but shows no ASUS markers.
+    static func probeCompatibility(host: String) async -> RouterCompatibility {
+        let cleanHost = host.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanHost.isEmpty else { return .unknown }
+
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = 4
+        config.waitsForConnectivity = false
+        let session = URLSession(configuration: config)
+
+        func fetch(_ path: String) async -> (status: Int, body: String)? {
+            guard let url = URL(string: "http://\(cleanHost)\(path)") else { return nil }
+            var request = URLRequest(url: url)
+            request.setValue("asusrouter-Android-DUTUtil-1.0.0.245", forHTTPHeaderField: "User-Agent")
+            guard let (data, response) = try? await session.data(for: request),
+                  let http = response as? HTTPURLResponse else { return nil }
+            return (http.statusCode, String(data: data, encoding: .utf8) ?? "")
+        }
+
+        // Can't reach the gateway at all — inconclusive.
+        guard let root = await fetch("/") else { return .unknown }
+        if root.body.lowercased().contains("asus") { return .supported }
+
+        // ASUS's login page is a strong secondary signal; non-ASUS routers 404
+        // or serve something else here.
+        if let login = await fetch("/Main_Login.asp"), login.status == 200,
+           login.body.lowercased().contains("asus") {
+            return .supported
+        }
+
+        // Reached something at the gateway, but it doesn't look like ASUS.
+        return .unsupported
+    }
+
     private func poll() {
         Task { @MainActor in
             // Everything is keyed by SSID; without it (no Location permission,
