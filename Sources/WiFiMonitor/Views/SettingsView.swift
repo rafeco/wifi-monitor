@@ -155,16 +155,6 @@ private struct NetworkDetailView: View {
                 if compatibility == .supported {
                     Button("Save", action: save)
                 }
-                if compatibility == .unsupported {
-                    Button("Configure anyway") {
-                        compatibility = .supported
-                        routerEnabled = true
-                        save()
-                    }
-                }
-                if isCurrent && !isProbing && compatibility != .unknown {
-                    Button("Re-check compatibility") { probe() }
-                }
                 Button("Forget Network", role: .destructive) { showForgetConfirm = true }
             }
         }
@@ -199,9 +189,13 @@ private struct NetworkDetailView: View {
             if isProbing {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
-                    Text("Checking router…").foregroundStyle(.secondary)
+                    Text("Checking whether this network's router is supported…")
+                        .foregroundStyle(.secondary)
                 }
             } else if isCurrent {
+                Text("This network's router hasn't been checked yet.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Button("Check router compatibility") { probe() }
             } else {
                 Text("Connect to this network to check whether its router is supported.")
