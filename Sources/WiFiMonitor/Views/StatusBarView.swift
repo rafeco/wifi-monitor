@@ -72,6 +72,11 @@ struct StatusBarView: View {
                         Text(ssid)
                             .font(.caption.weight(.medium))
                     }
+                    if snap.band != "Unknown" {
+                        Text(snap.band)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                     Text("\(snap.rssi) dBm")
                         .font(.system(.caption, design: .monospaced))
                     Text(snap.signalQuality)
