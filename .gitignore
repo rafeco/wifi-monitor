@@ -1,4 +1,5 @@
 .build/
 .swiftpm/
 WiFiMonitor.app/
+WiFiMonitor.zip
 .claude/
