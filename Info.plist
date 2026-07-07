@@ -8,14 +8,23 @@
     <string>com.rcolburn.wifimonitor</string>
     <key>CFBundleVersion</key>
     <string>1</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
     <key>CFBundleExecutable</key>
     <string>WiFiMonitor</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>14.0</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsLocalNetworking</key>
+        <true/>
+    </dict>
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>WiFi Monitor uses your location only to read the current WiFi network name, so it can detect when you switch networks.</string>
     <key>NSLocationUsageDescription</key>
