@@ -6,9 +6,17 @@ Built to answer the question: "Is the WiFi actually going down, or does it just 
 
 ## Install
 
-Download `WiFiMonitor.zip` from the [latest release](https://github.com/rafeco/wifi-monitor/releases/latest), unzip, and drag to Applications.
+Download `WiFiMonitor.zip` from the [latest release](https://github.com/rafeco/wifi-monitor/releases/latest), unzip, and drag **WiFiMonitor.app** to your Applications folder.
 
-Requires macOS 14+.
+The app is signed with a Developer ID and notarized by Apple, so it opens normally — no "unidentified developer" warning or right-click-to-open workaround.
+
+Requires macOS 14 (Sonoma) or later.
+
+### On first launch: Location permission
+
+macOS will ask for **Location** access. WiFi Monitor uses it only to read the name of the WiFi network you're on — on macOS 14+, reading the network name (SSID) requires Location permission. It's used to label your data by network, detect when you switch networks, and know which router to monitor.
+
+If you deny it, ping/latency and signal monitoring still work, but the network name and per-network router monitoring won't. Nothing is ever sent anywhere — the app makes no use of your actual geographic location.
 
 ## What it does
 
@@ -18,20 +26,24 @@ Everything is displayed on a single scrollable page:
 
 **WiFi Signal** — Monitors WiFi signal strength (RSSI), noise floor, SNR, transmit rate, channel, and band via CoreWLAN every 30 seconds. Charts RSSI over time with color-coded quality zones (green/yellow/red).
 
-**Router** (optional) — Queries an ASUS router's HTTP API every 60 seconds for WAN status, CPU/memory usage, and bandwidth counters. Shows live performance charts and logs provider switch events. Can be disabled in Settings for machines that don't need it.
+**Network health ("feels like")** — A single at-a-glance rating (Smooth / Usable / Rough / Down) that blends recent latency, jitter, and packet loss — the things that actually make a connection feel bad. When it dips, it tells you *why*: a weak WiFi signal, an upstream/ISP problem, or bufferbloat (your own traffic saturating the link).
 
-**Status bar** — Shows current ping latency, ISP provider, WiFi signal strength, average latency, and uptime percentage at a glance.
+**Router** (optional, ASUS only) — Queries a supported ASUS router's HTTP API every 60 seconds for WAN status, CPU/memory usage, and bandwidth counters, with live performance charts and a provider-switch log. Configured per network (see below).
 
-## Router setup
+**Status bar** — Shows current ping latency, ISP provider, WiFi network name, band (2.4/5/6 GHz), and signal strength, plus the "feels like" rating, average latency, and uptime percentage at a glance.
 
-Router monitoring is optional. To enable it:
+## Router setup (ASUS only)
 
-1. Press **Cmd+,** to open Settings
-2. Toggle "Enable router monitoring" on
-3. Enter your router's IP address (default: `192.168.50.1`), admin username, and password
-4. Click "Test Connection" to verify
+Router monitoring is optional and works **only with ASUS routers running ASUSWRT firmware** (tested with RT-AX58U / RT-AX3000). Everything else in the app works with any router.
 
-Currently supports ASUS routers running ASUSWRT firmware (tested with RT-AX58U / RT-AX3000). See [docs/router-api.md](docs/router-api.md) for API details.
+Settings keeps a separate profile for **each WiFi network** you join, so you can monitor your home router and ignore every coffee-shop network automatically:
+
+1. Press **Cmd+,** to open Settings and pick your network from the list (the one you're on is marked "Connected").
+2. The app checks whether its router is a supported ASUS model. If it isn't, it just says so — there's nothing to configure, and the rest of the app keeps working.
+3. For a supported router, turn on **Monitor this network's router**, confirm the auto-detected router IP (or enter it manually), and your admin username and password.
+4. Click **Test Connection** to verify. Passwords are stored in the macOS Keychain.
+
+The app only polls the router when you're actually on that network, so it never tries to reach it from elsewhere. See [docs/router-api.md](docs/router-api.md) for API details.
 
 ## Building from source
 
@@ -48,7 +60,7 @@ make clean   # remove build artifacts and app bundle
 
 Or open in Xcode: `open Package.swift`
 
-Releases are built automatically by GitHub Actions when a tag is pushed (`git tag v1.2 && git push --tags`).
+Signed, notarized releases are built automatically by GitHub Actions when a version tag is pushed (`git tag v1.4 && git push --tags`). See [docs/signing.md](docs/signing.md) for the signing/notarization setup and how to produce a signed build locally (`make dist`).
 
 ## Data storage
 
@@ -57,6 +69,7 @@ All data is stored as JSON files in `~/Library/Application Support/WiFiMonitor/`
 ```
 WiFiMonitor/
 ├── 2026-04-03.json                  # Ping records (one file per day)
+├── network-profiles.json            # Per-network router settings (no passwords)
 ├── wifi/
 │   └── wifi-2026-04-03.json         # WiFi signal snapshots
 └── router/
@@ -64,26 +77,32 @@ WiFiMonitor/
     └── events-2026-04-03.json       # Provider switch events
 ```
 
+Router passwords are kept in the macOS Keychain, not in these files.
+
 ## Architecture
 
 ```
 Sources/WiFiMonitor/
 ├── WiFiMonitorApp.swift              # App entry point, dependency wiring
 ├── Models/
-│   └── PingRecord.swift              # Ping data model + shortConnectionName helper
+│   ├── PingRecord.swift              # Ping data model + shortConnectionName helper
+│   ├── FeelsLike.swift               # "Feels like" score + cause attribution
+│   └── NetworkProfile.swift          # Per-SSID router profiles + store
 ├── Services/
 │   ├── PingService.swift             # 30s ping timer + ISP detection via ipinfo.io
 │   ├── PingStore.swift               # JSON persistence for ping data
-│   ├── WiFiService.swift             # 30s WiFi signal sampling via CoreWLAN
-│   ├── RouterService.swift           # ASUS router HTTP API client + 60s polling
-│   └── RouterStore.swift             # JSON persistence for router data
+│   ├── WiFiService.swift             # 30s WiFi + SSID sampling, network-change detection
+│   ├── RouterService.swift           # ASUS router HTTP API client + 60s polling + probe
+│   ├── RouterStore.swift             # JSON persistence for router data
+│   ├── LocationPermission.swift      # Requests Location access (needed to read SSID)
+│   └── Keychain.swift                # Router passwords in the macOS Keychain
 ├── Views/
 │   ├── ContentView.swift             # Single scrollable page layout
 │   ├── LatencyChartView.swift        # Swift Charts latency timeline (5-min buckets)
 │   ├── WiFiSignalChartView.swift     # Swift Charts RSSI timeline with quality zones
-│   ├── StatusBarView.swift           # Current ping + signal + uptime stats
+│   ├── StatusBarView.swift           # Current ping + signal + feels-like + uptime
 │   ├── RouterView.swift              # Router dashboard cards and charts
-│   └── SettingsView.swift            # Router config + enable/disable toggle
+│   └── SettingsView.swift            # Per-network list + router config
 └── Utilities/
     └── DateHelpers.swift             # Day boundary helpers
 ```
