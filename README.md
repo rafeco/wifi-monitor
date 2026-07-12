@@ -8,23 +8,9 @@ A macOS app that tracks WiFi connectivity, signal quality, and router telemetry 
 
 Download `WiFiMonitor.zip` from the [latest release](https://github.com/rafeco/wifi-monitor/releases/latest), unzip, and drag **WiFiMonitor.app** to your Applications folder.
 
-The app is signed with a Developer ID and notarized by Apple, so it opens normally — no "unidentified developer" warning or right-click-to-open workaround.
+Releases are signed with an Apple Developer ID and notarized, so if you just want to use the app you can download a release and run it — it opens normally, with no "unidentified developer" warning or right-click-to-open workaround, and no need to build from source.
 
 Requires macOS 14 (Sonoma) or later.
-
-### Verifying the download
-
-Every release is built by GitHub Actions, signed with an Apple Developer ID, notarized by Apple, and stapled, so Gatekeeper accepts it offline. You can confirm the copy you downloaded:
-
-```bash
-# Should print: source=Notarized Developer ID
-spctl -a -vvv -t install /Applications/WiFiMonitor.app
-
-# Should show the signing authority and team
-codesign -dvvv /Applications/WiFiMonitor.app 2>&1 | grep -E "Authority|TeamIdentifier"
-```
-
-The releases are signed by `Developer ID Application: Richard Colburn (4N5MARBX93)` (Team ID `4N5MARBX93`). See [docs/signing.md](docs/signing.md) for how the signing and notarization pipeline works.
 
 ### On first launch: Location permission
 
