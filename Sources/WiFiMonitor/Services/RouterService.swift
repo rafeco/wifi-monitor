@@ -73,6 +73,11 @@ final class RouterService {
     var lastError: String?
     var isPolling: Bool = false
 
+    /// Friendly name of the AiMesh node this Mac is connected to (e.g. "Living
+    /// Room"), or nil when it's not a mesh, we're not monitoring, or the node
+    /// can't be determined.
+    var connectedNode: String?
+
     /// Time-series for charts
     var history: [RouterSnapshot] = []
 
@@ -299,6 +304,9 @@ final class RouterService {
                 parseResponse(data)
                 isConnected = true
                 lastError = nil
+
+                // Best-effort: which AiMesh node are we on? Doesn't fail the poll.
+                await updateConnectedNode(host: host, token: token)
             } catch {
                 // Token might be expired, clear it so we re-auth next time
                 self.token = nil
@@ -364,6 +372,116 @@ final class RouterService {
         }
 
         return combined
+    }
+
+    /// MAC of this Mac's Wi-Fi interface as the router sees it, uppercased to
+    /// match ASUS's formatting. Read from `ifconfig` rather than
+    /// `CWInterface.hardwareAddress()` because the latter returns the burned-in
+    /// address, whereas the router lists the per-network *private* MAC that
+    /// `ifconfig` reports.
+    private var currentWiFiMAC: String? {
+        guard let iface = CWWiFiClient.shared().interface()?.interfaceName else { return nil }
+        return Self.macAddress(interface: iface)?.uppercased()
+    }
+
+    static func macAddress(interface: String) -> String? {
+        let process = Process()
+        let pipe = Pipe()
+        process.executableURL = URL(fileURLWithPath: "/sbin/ifconfig")
+        process.arguments = [interface]
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            return nil
+        }
+        guard process.terminationStatus == 0 else { return nil }
+
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        guard let output = String(data: data, encoding: .utf8) else { return nil }
+
+        for line in output.split(separator: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("ether ") {
+                return String(trimmed.dropFirst("ether ".count)).trimmingCharacters(in: .whitespaces)
+            }
+        }
+        return nil
+    }
+
+    /// Determine which AiMesh node this Mac is associated with. `get_cfg_clientlist`
+    /// maps node MAC → friendly alias; `get_allclientlist` is keyed by node MAC and
+    /// lists the clients on each, so we find our own MAC and read the node.
+    private func updateConnectedNode(host: String, token: String) async {
+        guard let myMAC = currentWiFiMAC else { connectedNode = nil; return }
+        do {
+            let cfg = try await appGet(host: host, token: token, hook: "get_cfg_clientlist()")
+            let aliases = Self.parseNodeAliases(cfg)
+            // Only meaningful on an actual mesh (more than one node).
+            guard aliases.count > 1 else { connectedNode = nil; return }
+
+            let all = try await appGet(host: host, token: token, hook: "get_allclientlist()")
+            if let nodeMAC = Self.findClientNode(all, clientMAC: myMAC) {
+                connectedNode = aliases[nodeMAC]
+            } else {
+                connectedNode = nil
+            }
+        } catch {
+            // Transient failure — leave the last known value in place.
+        }
+    }
+
+    /// Single `appGet.cgi` hook request returning the raw response body.
+    private func appGet(host: String, token: String, hook: String) async throws -> String {
+        let cleanHost = host.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: "http://\(cleanHost)/appGet.cgi") else { return "" }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        request.setValue("asusrouter-Android-DUTUtil-1.0.0.245", forHTTPHeaderField: "User-Agent")
+        request.setValue("asus_token=\(token)", forHTTPHeaderField: "Cookie")
+        request.httpBody = "hook=\(hook)".data(using: .utf8)
+        let (data, response) = try await session.data(for: request)
+        if let http = response as? HTTPURLResponse, http.statusCode != 200 {
+            throw URLError(.userAuthenticationRequired)
+        }
+        return String(data: data, encoding: .utf8) ?? ""
+    }
+
+    /// Parse `get_cfg_clientlist` into a map of uppercased node MAC → alias.
+    static func parseNodeAliases(_ body: String) -> [String: String] {
+        guard let data = body.data(using: .utf8),
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let nodes = root["get_cfg_clientlist"] as? [[String: Any]] else { return [:] }
+        var map: [String: String] = [:]
+        for node in nodes {
+            if let mac = (node["mac"] as? String)?.uppercased(),
+               let alias = node["alias"] as? String, !alias.isEmpty {
+                map[mac] = alias
+            }
+        }
+        return map
+    }
+
+    /// Find which node `clientMAC` is connected to in `get_allclientlist`
+    /// (keyed by node MAC → band → client MAC). Returns the uppercased node MAC.
+    static func findClientNode(_ body: String, clientMAC: String) -> String? {
+        guard let data = body.data(using: .utf8),
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let all = root["get_allclientlist"] as? [String: Any] else { return nil }
+        for (nodeMAC, bands) in all {
+            guard let bands = bands as? [String: Any] else { continue }
+            for (_, clients) in bands {
+                guard let clients = clients as? [String: Any] else { continue }
+                if clients.keys.contains(where: { $0.uppercased() == clientMAC }) {
+                    return nodeMAC.uppercased()
+                }
+            }
+        }
+        return nil
     }
 
     private func parseResponse(_ response: String) {

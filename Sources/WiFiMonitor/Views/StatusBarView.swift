@@ -5,6 +5,7 @@ struct StatusBarView: View {
     @Environment(PingService.self) private var pingService
     @Environment(PingStore.self) private var pingStore
     @Environment(WiFiService.self) private var wifiService
+    @Environment(RouterService.self) private var routerService
 
     private var records: [PingRecord] {
         pingStore.records(for: selectedDate)
@@ -93,6 +94,12 @@ struct StatusBarView: View {
                 Text(snap.signalQuality)
                     .font(.caption)
                     .foregroundStyle(signalColor)
+                if let node = routerService.connectedNode {
+                    Image(systemName: "wifi.router")
+                        .foregroundStyle(.secondary)
+                    Text(node)
+                        .font(.caption)
+                }
             }
         }
     }

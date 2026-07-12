@@ -204,13 +204,42 @@ Returns cumulative byte counters per network interface in hexadecimal.
 
 `_rx` = bytes received (download), `_tx` = bytes transmitted (upload).
 
+### `get_cfg_clientlist()` and `get_allclientlist()` (AiMesh)
+
+Used together to work out **which AiMesh node this Mac is connected to**.
+
+`get_cfg_clientlist()` returns the mesh nodes as an array; each has a `mac` and a friendly `alias`:
+
+```json
+{
+"get_cfg_clientlist":[
+  {"alias":"Living Room","mac":"7C:10:C9:CB:35:60","ip":"192.168.50.1","online":"1","level":"0", ...},
+  {"alias":"Kitchen","mac":"7C:10:C9:CB:2B:50","ip":"192.168.50.155","online":"1","level":"1", ...}
+]
+}
+```
+
+`get_allclientlist()` is keyed by **node MAC → band → client MAC**, so a client's node is just the key it appears under:
+
+```json
+{
+"get_allclientlist":{
+  "7C:10:C9:CB:35:60":{"2G":{"BA:5E:3F:31:2F:7B":{"ip":"192.168.50.174","rssi":"-58"}}},
+  "7C:10:C9:CB:2B:50":{"2G":{"90:BF:D9:B1:D9:63":{"ip":"192.168.50.86","rssi":"-5"}}}
+}
+}
+```
+
+**Detection** (`RouterService.updateConnectedNode`): read this Mac's Wi-Fi MAC via `CWInterface.hardwareAddress()` (the per-network private address, which is what the router lists), find it among the client MACs in `get_allclientlist` to get the node MAC, then look up the alias in `get_cfg_clientlist`. Both are standard JSON (parse with `JSONSerialization`, unlike the `wanlink()` function-return format). The node is only surfaced when there's more than one node (an actual mesh). `get_clientlist()` also carries an `amesh_papMac` per client (the parent node MAC), but the node-keyed `get_allclientlist` is simpler and works uniformly for the main router and nodes.
+
 ## Other Available Hooks
 
 These hooks are available but not currently used by WiFi Monitor:
 
 | Hook | Description |
 |---|---|
-| `get_clientlist()` | Connected devices with MAC, IP, hostname |
+| `get_clientlist()` | Connected devices with MAC, IP, hostname (incl. `amesh_papMac`) |
+| `get_wclientlist()` | Wireless clients grouped by node MAC → band → [client MACs] |
 | `uptime()` | System uptime |
 | `nvram_get(key)` | Read NVRAM configuration values |
 | `wl_sta_list_2g()` | 2.4 GHz WiFi client list |
