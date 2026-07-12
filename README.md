@@ -12,6 +12,20 @@ The app is signed with a Developer ID and notarized by Apple, so it opens normal
 
 Requires macOS 14 (Sonoma) or later.
 
+### Verifying the download
+
+Every release is built by GitHub Actions, signed with an Apple Developer ID, notarized by Apple, and stapled, so Gatekeeper accepts it offline. You can confirm the copy you downloaded:
+
+```bash
+# Should print: source=Notarized Developer ID
+spctl -a -vvv -t install /Applications/WiFiMonitor.app
+
+# Should show the signing authority and team
+codesign -dvvv /Applications/WiFiMonitor.app 2>&1 | grep -E "Authority|TeamIdentifier"
+```
+
+The releases are signed by `Developer ID Application: Richard Colburn (4N5MARBX93)` (Team ID `4N5MARBX93`). See [docs/signing.md](docs/signing.md) for how the signing and notarization pipeline works.
+
 ### On first launch: Location permission
 
 macOS will ask for **Location** access. WiFi Monitor uses it only to read the name of the WiFi network you're on — on macOS 14+, reading the network name (SSID) requires Location permission. It's used to label your data by network, detect when you switch networks, and know which router to monitor.
