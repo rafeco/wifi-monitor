@@ -1,8 +1,8 @@
 # WiFi Monitor
 
-A macOS SwiftUI app that tracks WiFi connectivity, signal quality, and router telemetry throughout the day.
+A macOS app that tracks WiFi connectivity, signal quality, and router telemetry throughout the day — built to answer: "Is the WiFi actually going down, or does it just feel that way?"
 
-Built to answer the question: "Is the WiFi actually going down, or does it just feel that way?"
+**It runs on any network, but it's built for [ASUS AiMesh](https://www.asus.com/content/asus-aimesh/).** On any Mac you get ping/latency history, ISP detection, WiFi signal charts, and an at-a-glance network "feels like" rating. Point it at an ASUS router and the fine-grained features light up: live router telemetry (CPU, memory, bandwidth), bufferbloat detection, and — on a mesh — showing exactly **which node you're connected to** as you move around the house.
 
 ## Install
 
@@ -26,15 +26,17 @@ Everything is displayed on a single scrollable page:
 
 **WiFi Signal** — Monitors WiFi signal strength (RSSI), noise floor, SNR, transmit rate, channel, and band via CoreWLAN every 30 seconds. Charts RSSI over time with color-coded quality zones (green/yellow/red).
 
-**Network health ("feels like")** — A single at-a-glance rating (Smooth / Usable / Rough / Down) that blends recent latency, jitter, and packet loss — the things that actually make a connection feel bad. When it dips, it tells you *why*: a weak WiFi signal, an upstream/ISP problem, or bufferbloat (your own traffic saturating the link).
+**Network health ("feels like")** — A single at-a-glance rating (Smooth / Usable / Rough / Down) that blends recent latency, jitter, and packet loss — the things that actually make a connection feel bad. When it dips, it tells you *why*: a weak WiFi signal, an upstream/ISP problem, or bufferbloat (your own traffic saturating the link — bufferbloat detection uses ASUS router bandwidth counters).
 
-**Router** (optional, ASUS only) — Queries a supported ASUS router's HTTP API every 60 seconds for WAN status, CPU/memory usage, and bandwidth counters, with live performance charts and a provider-switch log. Configured per network (see below).
+**Router** (ASUS only) — Queries a supported ASUS router's HTTP API every 60 seconds for WAN status, CPU/memory usage, and bandwidth counters, with live performance charts and a provider-switch log. Configured per network (see below).
 
-**Status bar** — Shows current ping latency, ISP provider, WiFi network name, band (2.4/5/6 GHz), and signal strength, plus the "feels like" rating, average latency, and uptime percentage at a glance.
+**AiMesh node** (ASUS mesh only) — Shows which mesh node you're connected to (e.g. "Living Room"), updating as you roam between nodes. Uses the router's own client-to-node mapping, so no guesswork.
+
+**Status bar** — Shows current ping latency, ISP provider, WiFi network name, band (2.4/5/6 GHz), signal strength, and — on a mesh — the connected node, plus the prominent "feels like" weather rating and uptime percentage.
 
 ## Router setup (ASUS only)
 
-Router monitoring is optional and works **only with ASUS routers running ASUSWRT firmware** (tested with RT-AX58U / RT-AX3000). Everything else in the app works with any router.
+Router monitoring is optional and works **only with ASUS routers running ASUSWRT firmware** (tested with RT-AX58U / RT-AX3000 and a ZenWiFi XT8 AiMesh). Everything else in the app works with any router.
 
 Settings keeps a separate profile for **each WiFi network** you join, so you can monitor your home router and ignore every coffee-shop network automatically:
 
@@ -43,7 +45,7 @@ Settings keeps a separate profile for **each WiFi network** you join, so you can
 3. For a supported router, turn on **Monitor this network's router**, confirm the auto-detected router IP (or enter it manually), and your admin username and password.
 4. Click **Test Connection** to verify. Passwords are stored in the macOS Keychain.
 
-The app only polls the router when you're actually on that network, so it never tries to reach it from elsewhere. See [docs/router-api.md](docs/router-api.md) for API details.
+On an AiMesh, the status bar then shows which node you're currently connected to, updating as you roam. The app only polls the router when you're actually on that network, so it never tries to reach it from elsewhere. See [docs/router-api.md](docs/router-api.md) for API details.
 
 ## Building from source
 
@@ -92,7 +94,7 @@ Sources/WiFiMonitor/
 │   ├── PingService.swift             # 30s ping timer + ISP detection via ipinfo.io
 │   ├── PingStore.swift               # JSON persistence for ping data
 │   ├── WiFiService.swift             # 30s WiFi + SSID sampling, network-change detection
-│   ├── RouterService.swift           # ASUS router HTTP API client + 60s polling + probe
+│   ├── RouterService.swift           # ASUS router HTTP API client + 60s polling + probe + AiMesh node
 │   ├── RouterStore.swift             # JSON persistence for router data
 │   ├── LocationPermission.swift      # Requests Location access (needed to read SSID)
 │   └── Keychain.swift                # Router passwords in the macOS Keychain
