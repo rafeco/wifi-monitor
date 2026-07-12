@@ -16,12 +16,6 @@ struct StatusBarView: View {
         return Double(successful) / Double(records.count) * 100
     }
 
-    private var averageLatency: Double? {
-        let latencies = records.compactMap(\.latencyMs)
-        guard !latencies.isEmpty else { return nil }
-        return latencies.reduce(0, +) / Double(latencies.count)
-    }
-
     private var currentStatusColor: Color {
         guard pingService.lastSuccess else { return .red }
         guard let latency = pingService.lastLatency else { return .green }
@@ -38,73 +32,83 @@ struct StatusBarView: View {
     }
 
     var body: some View {
-        HStack(spacing: 16) {
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(currentStatusColor)
-                    .frame(width: 12, height: 12)
-
-                if pingService.lastSuccess, let latency = pingService.lastLatency {
-                    Text(String(format: "%.0f ms", latency))
-                        .font(.system(.body, design: .monospaced))
-                    if let conn = pingService.lastConnection {
-                        let short = shortConnectionName(conn)
-                        Text("via \(short)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                } else if !pingService.isRunning {
-                    Text("Not monitoring")
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text("Timeout")
-                        .font(.system(.body, design: .monospaced))
-                        .foregroundStyle(.red)
-                }
-            }
-
-            if let snap = wifiService.lastSnapshot {
-                Divider().frame(height: 16)
-                HStack(spacing: 4) {
-                    Image(systemName: "wifi")
-                        .foregroundStyle(signalColor)
-                    if let ssid = wifiService.currentSSID {
-                        Text(ssid)
-                            .font(.caption.weight(.medium))
-                    }
-                    if snap.band != "Unknown" {
-                        Text(snap.band)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                    Text("\(snap.rssi) dBm")
-                        .font(.system(.caption, design: .monospaced))
-                    Text(snap.signalQuality)
-                        .font(.caption)
-                        .foregroundStyle(signalColor)
-                }
-            }
-
-            Divider().frame(height: 16)
+        HStack(alignment: .center, spacing: 20) {
+            // Prominent "feels like" weather headline.
             FeelsLikeView()
 
             Spacer()
 
-            HStack(spacing: 16) {
-                if let avg = averageLatency {
-                    Label(String(format: "Avg: %.0f ms", avg), systemImage: "timer")
-                }
-
-                Label(
-                    String(format: "Uptime: %.1f%%", uptimePercentage),
-                    systemImage: uptimePercentage >= 99 ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"
-                )
-                .foregroundStyle(uptimePercentage >= 99 ? .green : (uptimePercentage >= 95 ? .orange : .red))
-
-                Label("\(records.count) pings", systemImage: "network")
-                    .foregroundStyle(.secondary)
+            // Everything else, arranged cleanly on the right.
+            VStack(alignment: .trailing, spacing: 4) {
+                pingRow
+                if wifiService.lastSnapshot != nil { wifiRow }
+                statsRow
             }
         }
+    }
+
+    private var pingRow: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(currentStatusColor)
+                .frame(width: 8, height: 8)
+
+            if pingService.lastSuccess, let latency = pingService.lastLatency {
+                Text(String(format: "%.0f ms", latency))
+                    .font(.system(.callout, design: .monospaced))
+                if let conn = pingService.lastConnection {
+                    Text("via \(shortConnectionName(conn))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } else if !pingService.isRunning {
+                Text("Not monitoring")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("Timeout")
+                    .font(.system(.callout, design: .monospaced))
+                    .foregroundStyle(.red)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var wifiRow: some View {
+        if let snap = wifiService.lastSnapshot {
+            HStack(spacing: 6) {
+                Image(systemName: "wifi")
+                    .foregroundStyle(signalColor)
+                if let ssid = wifiService.currentSSID {
+                    Text(ssid)
+                        .font(.caption.weight(.medium))
+                }
+                if snap.band != "Unknown" {
+                    Text(snap.band)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Text("\(snap.rssi) dBm")
+                    .font(.system(.caption, design: .monospaced))
+                Text(snap.signalQuality)
+                    .font(.caption)
+                    .foregroundStyle(signalColor)
+            }
+        }
+    }
+
+    private var statsRow: some View {
+        HStack(spacing: 12) {
+            Label(
+                String(format: "Uptime %.1f%%", uptimePercentage),
+                systemImage: uptimePercentage >= 99 ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"
+            )
+            .foregroundStyle(uptimePercentage >= 99 ? .green : (uptimePercentage >= 95 ? .orange : .red))
+
+            Label("\(records.count) pings", systemImage: "network")
+                .foregroundStyle(.secondary)
+        }
+        .font(.caption)
     }
 }
 
@@ -154,15 +158,18 @@ struct FeelsLikeView: View {
 
     var body: some View {
         let s = score
-        HStack(spacing: 6) {
+        HStack(spacing: 12) {
             Image(systemName: s.rating.symbol)
+                .font(.system(size: 34))
+                .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(s.rating.color)
+                .frame(width: 40)
             VStack(alignment: .leading, spacing: 1) {
                 Text("Feels \(s.rating.rawValue)")
-                    .font(.callout.weight(.medium))
+                    .font(.title2.weight(.semibold))
                 if let cause = s.cause.description {
                     Text(cause)
-                        .font(.caption2)
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }

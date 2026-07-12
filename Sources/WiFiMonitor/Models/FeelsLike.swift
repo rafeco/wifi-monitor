@@ -25,12 +25,14 @@ struct FeelsLikeScore {
             }
         }
 
+        /// Weather-report iconography, matching the "feels like" metaphor:
+        /// clear skies down through a thunderstorm.
         var symbol: String {
             switch self {
-            case .smooth: return "checkmark.circle.fill"
-            case .usable: return "circle.fill"
-            case .rough: return "exclamationmark.triangle.fill"
-            case .down: return "xmark.octagon.fill"
+            case .smooth: return "sun.max.fill"
+            case .usable: return "cloud.sun.fill"
+            case .rough: return "cloud.rain.fill"
+            case .down: return "cloud.bolt.rain.fill"
             }
         }
     }

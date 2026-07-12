@@ -17,20 +17,22 @@ struct ContentView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                StatusBarView(selectedDate: selectedDate)
-                    .padding()
+        VStack(spacing: 0) {
+            // Pinned top bar — stays put while the content below scrolls.
+            StatusBarView(selectedDate: selectedDate)
+                .padding()
 
-                Divider()
+            Divider()
 
-                DayNavigationView(selectedDate: $selectedDate)
-                    .padding(.horizontal)
-                    .padding(.vertical, 8)
+            ScrollView {
+                VStack(spacing: 0) {
+                    DayNavigationView(selectedDate: $selectedDate)
+                        .padding(.horizontal)
+                        .padding(.vertical, 8)
 
-                Divider()
+                    Divider()
 
-                VStack(spacing: 16) {
+                    VStack(spacing: 16) {
                     // -- Connectivity Section --
                     GroupBox {
                         VStack(alignment: .leading, spacing: 12) {
@@ -55,8 +57,9 @@ struct ContentView: View {
 
                         RouterSectionView()
                     }
+                    }
+                    .padding()
                 }
-                .padding()
             }
         }
         .frame(minWidth: 700, minHeight: 500)
