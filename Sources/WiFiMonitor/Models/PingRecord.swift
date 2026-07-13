@@ -11,6 +11,24 @@ func shortConnectionName(_ connection: String?) -> String {
     return connection
 }
 
+/// Timestamps where the detected connection (ISP) changes across the day —
+/// used to draw network-change markers on the charts. Records without a known
+/// connection are skipped so a temporary lookup gap isn't mistaken for a switch.
+func networkChangeTimestamps(from records: [PingRecord]) -> [Date] {
+    let sorted = records.sorted { $0.timestamp < $1.timestamp }
+    var changes: [Date] = []
+    var previous: String?
+    for record in sorted {
+        guard let connection = record.connection else { continue }
+        let name = shortConnectionName(connection)
+        if let previous, name != previous {
+            changes.append(record.timestamp)
+        }
+        previous = name
+    }
+    return changes
+}
+
 struct PingRecord: Codable, Identifiable {
     let id: UUID
     let timestamp: Date

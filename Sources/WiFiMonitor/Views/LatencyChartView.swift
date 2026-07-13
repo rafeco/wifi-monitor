@@ -59,6 +59,10 @@ struct LatencyChartView: View {
         Array(Set(buckets.map(\.connection))).sorted()
     }
 
+    private var networkChanges: [Date] {
+        networkChangeTimestamps(from: records)
+    }
+
     var body: some View {
         if records.isEmpty {
             ContentUnavailableView(
@@ -85,13 +89,21 @@ struct LatencyChartView: View {
                     }
                 }
 
-                Chart(buckets) { bucket in
-                    LineMark(
-                        x: .value("Time", bucket.timestamp),
-                        y: .value("Latency", bucket.avgLatency)
-                    )
-                    .foregroundStyle(by: .value("Connection", bucket.connection))
-                    .lineStyle(StrokeStyle(lineWidth: 1.5))
+                Chart {
+                    ForEach(buckets) { bucket in
+                        LineMark(
+                            x: .value("Time", bucket.timestamp),
+                            y: .value("Latency", bucket.avgLatency)
+                        )
+                        .foregroundStyle(by: .value("Connection", bucket.connection))
+                        .lineStyle(StrokeStyle(lineWidth: 1.5))
+                    }
+
+                    ForEach(networkChanges, id: \.self) { change in
+                        RuleMark(x: .value("Network change", change))
+                            .foregroundStyle(.gray.opacity(0.8))
+                            .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
+                    }
                 }
                 .chartForegroundStyleScale(
                     domain: connections,

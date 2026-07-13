@@ -12,11 +12,16 @@ struct WiFiSignalBucket: Identifiable {
 struct WiFiSignalChartView: View {
     let selectedDate: Date
     @Environment(WiFiStore.self) private var wifiStore
+    @Environment(PingStore.self) private var pingStore
 
     private var snapshots: [WiFiSnapshot] {
         // Access updateCount to trigger re-render when new data arrives
         let _ = wifiStore.updateCount
         return wifiStore.snapshots(for: selectedDate).filter { $0.rssi != 0 }
+    }
+
+    private var networkChanges: [Date] {
+        networkChangeTimestamps(from: pingStore.records(for: selectedDate))
     }
 
     private var buckets: [WiFiSignalBucket] {
@@ -60,20 +65,21 @@ struct WiFiSignalChartView: View {
                     }
                 }
 
-                Chart(buckets) { bucket in
-                    LineMark(
-                        x: .value("Time", bucket.timestamp),
-                        y: .value("RSSI", bucket.avgRssi)
-                    )
-                    .foregroundStyle(.blue)
-                    .lineStyle(StrokeStyle(lineWidth: 2))
+                Chart {
+                    ForEach(buckets) { bucket in
+                        LineMark(
+                            x: .value("Time", bucket.timestamp),
+                            y: .value("RSSI", bucket.avgRssi)
+                        )
+                        .foregroundStyle(.blue)
+                        .lineStyle(StrokeStyle(lineWidth: 2))
+                    }
 
-                    PointMark(
-                        x: .value("Time", bucket.timestamp),
-                        y: .value("RSSI", bucket.avgRssi)
-                    )
-                    .foregroundStyle(.blue)
-                    .symbolSize(15)
+                    ForEach(networkChanges, id: \.self) { change in
+                        RuleMark(x: .value("Network change", change))
+                            .foregroundStyle(.gray.opacity(0.8))
+                            .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
+                    }
                 }
                 .chartBackground { proxy in
                     GeometryReader { geo in
