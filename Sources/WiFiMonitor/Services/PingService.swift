@@ -48,6 +48,9 @@ final class PingService {
     private func handleNetworkChange() {
         cachedConnection = nil
         lastConnectionCheck = .distantPast
+        // Clear the displayed provider too, so we don't show the old network's
+        // ISP until the fresh lookup returns (or if it can't be reached).
+        lastConnection = nil
         performPing()
     }
 

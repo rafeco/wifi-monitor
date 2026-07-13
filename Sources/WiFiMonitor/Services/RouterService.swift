@@ -100,6 +100,7 @@ final class RouterService {
     private var tokenHost: String?
     private var profileStore: NetworkProfileStore?
     private var timer: Timer?
+    private var networkChangeObserver: NSObjectProtocol?
     private let session: URLSession
     private var store: RouterStore?
 
@@ -121,6 +122,14 @@ final class RouterService {
             history = store.snapshots(for: Date())
             providerEvents = store.providerEvents(for: Date())
         }
+        // Re-evaluate immediately when the WiFi network changes, rather than
+        // waiting up to a full poll interval with stale data on screen.
+        networkChangeObserver = NotificationCenter.default.addObserver(
+            forName: .wifiNetworkChanged, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.handleNetworkChange()
+        }
+
         // Always poll; each cycle decides whether the current network has an
         // enabled profile. This lets us discover networks and pick up profile
         // changes without restarting.
@@ -136,6 +145,20 @@ final class RouterService {
         timer?.invalidate()
         timer = nil
         isPolling = false
+        if let networkChangeObserver {
+            NotificationCenter.default.removeObserver(networkChangeObserver)
+        }
+        networkChangeObserver = nil
+    }
+
+    /// The WiFi network changed. Drop the auth token and the connected-node
+    /// label (both are specific to the previous network) so nothing stale
+    /// lingers, then re-poll to re-gate on the new network.
+    private func handleNetworkChange() {
+        token = nil
+        tokenHost = nil
+        connectedNode = nil
+        poll()
     }
 
     func testConnection(host: String, username: String, password: String) async -> String? {
@@ -254,6 +277,7 @@ final class RouterService {
             // or not on WiFi) we can't pick a profile.
             guard let current = currentSSID else {
                 isConnected = false
+                connectedNode = nil
                 lastError = "Grant Location Services to identify the WiFi network."
                 return
             }
@@ -265,12 +289,14 @@ final class RouterService {
             // authenticating against a stranger's router at the same private IP.
             guard let profile = profileStore?.profile(for: current), profile.routerEnabled else {
                 isConnected = false
+                connectedNode = nil
                 lastError = "Router monitoring is off for \(current). Enable it in Settings (⌘,)."
                 return
             }
 
             guard let password = profileStore?.password(for: current), !password.isEmpty else {
                 isConnected = false
+                connectedNode = nil
                 lastError = "No router password saved for \(current). Add it in Settings (⌘,)."
                 return
             }
