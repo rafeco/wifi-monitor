@@ -182,5 +182,11 @@ struct FeelsLikeView: View {
             }
         }
         .help("Network feels-like score: \(s.score)/100")
+        .onAppear {
+            DockIconController.update(for: s.rating)
+        }
+        .onChange(of: s.rating) { _, rating in
+            DockIconController.update(for: rating)
+        }
     }
 }

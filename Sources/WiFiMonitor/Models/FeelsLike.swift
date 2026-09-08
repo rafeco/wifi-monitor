@@ -10,7 +10,7 @@ struct FeelsLikeScore {
     let rating: Rating
     let cause: Cause
 
-    enum Rating: String {
+    enum Rating: String, Hashable {
         case smooth = "Smooth"
         case usable = "Usable"
         case rough = "Rough"
