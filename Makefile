@@ -7,7 +7,12 @@ ICNS = .build/AppIcon.icns
 # Signing/notarization (see docs/signing.md):
 #   SIGN_IDENTITY  e.g. "Developer ID Application: Your Name (TEAMID)"
 #   NOTARY_PROFILE keychain profile from `xcrun notarytool store-credentials`
-.PHONY: build run clean release-build sign dist
+.PHONY: build run clean release-build sign dist test
+
+test:
+	mkdir -p .build
+	swiftc Sources/WiFiMonitor/Models/PingRecord.swift Sources/WiFiMonitor/Models/PingChartBucket.swift scripts/test-ping-buckets.swift -o .build/test-ping-buckets
+	.build/test-ping-buckets
 
 MASKED_PNG = .build/AppIcon-masked.png
 

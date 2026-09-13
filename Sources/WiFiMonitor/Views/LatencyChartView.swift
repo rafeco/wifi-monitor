@@ -1,15 +1,6 @@
 import SwiftUI
 import Charts
 
-struct ChartBucket: Identifiable {
-    let id = UUID()
-    let timestamp: Date
-    let avgLatency: Double
-    let maxLatency: Double
-    let connection: String
-    let hadFailure: Bool
-}
-
 struct LatencyChartView: View {
     let selectedDate: Date
     @Environment(PingStore.self) private var pingStore
@@ -18,40 +9,12 @@ struct LatencyChartView: View {
         pingStore.records(for: selectedDate)
     }
 
-    /// Most common known connection name for the day, used as fallback for nil records
-    private var primaryConnection: String {
-        let known = records.compactMap(\.connection)
-        guard !known.isEmpty else { return "Unknown" }
-        let counts = Dictionary(grouping: known, by: { $0 }).mapValues(\.count)
-        return shortConnectionName(counts.max(by: { $0.value < $1.value })!.key)
-    }
-
-    /// Aggregate records into 5-minute buckets
-    private var buckets: [ChartBucket] {
-        let calendar = Calendar.current
-        let grouped = Dictionary(grouping: records) { record -> Date in
-            let comps = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: record.timestamp)
-            let roundedMinute = (comps.minute! / 5) * 5
-            return calendar.date(from: DateComponents(
-                year: comps.year, month: comps.month, day: comps.day,
-                hour: comps.hour, minute: roundedMinute
-            ))!
-        }
-        return grouped.map { (timestamp, records) in
-            let latencies = records.compactMap(\.latencyMs)
-            let avg = latencies.isEmpty ? 0 : latencies.reduce(0, +) / Double(latencies.count)
-            let max = latencies.max() ?? 0
-            let hadFailure = records.contains { !$0.success }
-            // Use most common connection in bucket, falling back to primary
-            let connCounts = Dictionary(grouping: records, by: { $0.shortConnection }).mapValues(\.count)
-            var conn = connCounts.max(by: { $0.value < $1.value })?.key ?? primaryConnection
-            if conn == "Unknown" { conn = primaryConnection }
-            return ChartBucket(timestamp: timestamp, avgLatency: avg, maxLatency: max, connection: conn, hadFailure: hadFailure)
-        }.sorted { $0.timestamp < $1.timestamp }
+    private var buckets: [PingChartBucket] {
+        PingChartBucket.aggregate(records)
     }
 
     private var chartMax: Double {
-        let maxRecorded = buckets.map(\.maxLatency).max() ?? 100
+        let maxRecorded = buckets.compactMap(\.maxLatency).max() ?? 100
         return max(maxRecorded * 1.2, 100)
     }
 
@@ -91,12 +54,22 @@ struct LatencyChartView: View {
 
                 Chart {
                     ForEach(buckets) { bucket in
-                        LineMark(
-                            x: .value("Time", bucket.timestamp),
-                            y: .value("Latency", bucket.avgLatency)
-                        )
-                        .foregroundStyle(by: .value("Connection", bucket.connection))
-                        .lineStyle(StrokeStyle(lineWidth: 1.5))
+                        if let latency = bucket.avgLatency {
+                            LineMark(
+                                x: .value("Time", bucket.timestamp),
+                                y: .value("Latency", latency),
+                                series: .value("Segment", bucket.segment)
+                            )
+                            .foregroundStyle(by: .value("Connection", bucket.connection))
+                            .lineStyle(StrokeStyle(lineWidth: 1.5))
+
+                            PointMark(
+                                x: .value("Time", bucket.timestamp),
+                                y: .value("Latency", latency)
+                            )
+                            .foregroundStyle(by: .value("Connection", bucket.connection))
+                            .symbolSize(8)
+                        }
                     }
 
                     ForEach(networkChanges, id: \.self) { change in
@@ -109,7 +82,7 @@ struct LatencyChartView: View {
                     domain: connections,
                     range: connections.map { connectionColor(for: $0) }
                 )
-                .chartLegend(connections.count > 1 ? .visible : .hidden)
+                .chartLegend(.hidden)
                 .chartXScale(domain: startOfDay(selectedDate)...endOfDay(selectedDate))
                 .chartYScale(domain: 0...chartMax)
                 .chartXAxis {
@@ -124,10 +97,64 @@ struct LatencyChartView: View {
                         AxisValueLabel {
                             if let v = value.as(Double.self) {
                                 Text("\(Int(v)) ms")
+                                    .frame(width: 56, alignment: .leading)
                             }
                         }
                     }
                 }
+                .frame(height: 180)
+
+                Label("Packet loss", systemImage: "exclamationmark.circle")
+                    .font(.headline)
+                    .padding(.top, 8)
+                Text("Failed pings per 5 minutes · Gaps mean no recorded pings")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Chart {
+                    ForEach(buckets) { bucket in
+                        if bucket.lossPercentage > 0 {
+                            BarMark(
+                                xStart: .value("Start", bucket.timestamp),
+                                xEnd: .value("End", bucket.timestamp.addingTimeInterval(300)),
+                                y: .value("Packet loss", bucket.lossPercentage)
+                            )
+                            .foregroundStyle(.red)
+                        } else {
+                            PointMark(
+                                x: .value("Time", bucket.timestamp.addingTimeInterval(150)),
+                                y: .value("Packet loss", 0)
+                            )
+                            .foregroundStyle(.secondary)
+                            .symbolSize(6)
+                        }
+                    }
+                    ForEach(networkChanges, id: \.self) { change in
+                        RuleMark(x: .value("Network change", change))
+                            .foregroundStyle(.gray.opacity(0.8))
+                            .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
+                    }
+                }
+                .chartXScale(domain: startOfDay(selectedDate)...endOfDay(selectedDate))
+                .chartYScale(domain: 0...100)
+                .chartXAxis {
+                    AxisMarks(values: .stride(by: .hour, count: 2)) { _ in
+                        AxisGridLine()
+                        AxisValueLabel(format: .dateTime.hour(.defaultDigits(amPM: .abbreviated)))
+                    }
+                }
+                .chartYAxis {
+                    AxisMarks(values: [0, 50, 100]) { value in
+                        AxisGridLine()
+                        AxisValueLabel {
+                            if let loss = value.as(Int.self) {
+                                Text("\(loss)%")
+                                    .frame(width: 56, alignment: .leading)
+                            }
+                        }
+                    }
+                }
+                .frame(height: 100)
             }
         }
     }

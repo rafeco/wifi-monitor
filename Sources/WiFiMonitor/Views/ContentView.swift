@@ -63,7 +63,6 @@ struct ContentView: View {
                             Label("Latency", systemImage: "network")
                                 .font(.headline)
                             LatencyChartView(selectedDate: selectedDate)
-                                .frame(height: 200)
                         }
                     }
 
