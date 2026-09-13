@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 
 struct ContentView: View {
+    @Environment(UpdateService.self) private var updateService
     @Environment(PingService.self) private var pingService
     @Environment(PingStore.self) private var pingStore
     @Environment(RouterService.self) private var routerService
@@ -50,6 +51,21 @@ struct ContentView: View {
             if !collapsed {
             ScrollView {
                 VStack(spacing: 0) {
+                    if let release = updateService.availableRelease {
+                        HStack {
+                            Label("WiFi Monitor \(release.tag_name) is available", systemImage: "arrow.down.circle")
+                            Spacer()
+                            Link("Download Update", destination: release.downloadPage)
+                            Button("Skip This Version") { updateService.skip() }
+                            Button { updateService.dismiss() } label: {
+                                Image(systemName: "xmark")
+                            }
+                            .help("Remind me tomorrow")
+                            .accessibilityLabel("Dismiss update notice")
+                        }
+                        .padding()
+                        .background(.blue.opacity(0.08))
+                    }
                     DayNavigationView(selectedDate: $selectedDate)
                         .padding(.horizontal)
                         .padding(.vertical, 8)
@@ -118,6 +134,13 @@ struct ContentView: View {
 
     private var windowControls: some View {
         HStack(spacing: 10) {
+            if collapsed, let release = updateService.availableRelease {
+                Link(destination: release.downloadPage) {
+                    Image(systemName: "arrow.down.circle.fill")
+                }
+                .help("WiFi Monitor \(release.tag_name) is available — download update")
+            }
+
             Button {
                 stayOnTop.toggle()
             } label: {

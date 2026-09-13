@@ -12,6 +12,12 @@ Releases are signed with an Apple Developer ID and notarized, so if you just wan
 
 Requires macOS 14 (Sonoma) or later.
 
+### Release notifications
+
+WiFi Monitor checks GitHub for a new stable release on launch (at most once daily) and while running. An update notice links to the release’s download page; download the ZIP and replace the app in Applications as usual. In the collapsed window, an arrow icon links to the available update. Updates are not installed automatically.
+
+Choose **WiFi Monitor → Check for Updates…** to check immediately, including versions you previously skipped. Dismiss a notice to be reminded at the next daily check, or choose **Skip This Version** to hide that release permanently. Offline or failed background checks retry quietly after an hour. Checks send a standard HTTPS request to GitHub; no WiFi measurements, network names, or router credentials are included. Source builds need an app bundle with a version in `Info.plist` to check for updates.
+
 ### On first launch: Location permission
 
 macOS will ask for **Location** access. WiFi Monitor uses it only to read the name of the WiFi network you're on — on macOS 14+, reading the network name (SSID) requires Location permission. It's used to label your data by network, detect when you switch networks, and know which router to monitor.

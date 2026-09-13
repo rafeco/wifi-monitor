@@ -7,6 +7,7 @@ struct WiFiMonitorApp: App {
     @Environment(\.openWindow) private var openWindow
 
     private static let repoURL = URL(string: "https://github.com/rafeco/wifi-monitor")!
+    @State private var updateService = UpdateService()
     let pingService = PingService()
     let pingStore = PingStore()
     let routerService = RouterService()
@@ -19,8 +20,10 @@ struct WiFiMonitorApp: App {
         WindowGroup(id: "main") {
             ContentView()
                 .onAppear {
+                    updateService.start()
                     appDelegate.reopenMainWindow = { openWindow(id: "main") }
                 }
+                .environment(updateService)
                 .environment(pingService)
                 .environment(pingStore)
                 .environment(routerService)
@@ -33,6 +36,10 @@ struct WiFiMonitorApp: App {
             // Replace the default About item with one that links to the repo.
             CommandGroup(replacing: .appInfo) {
                 Button("About WiFi Monitor") { showAboutPanel() }
+                Button(updateService.isChecking ? "Checking for Updates…" : "Check for Updates…") {
+                    Task { await updateService.check(manual: true) }
+                }
+                .disabled(updateService.isChecking)
             }
         }
 

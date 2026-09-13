@@ -13,6 +13,8 @@ test:
 	mkdir -p .build
 	swiftc Sources/WiFiMonitor/Models/PingRecord.swift Sources/WiFiMonitor/Models/PingChartBucket.swift scripts/test-ping-buckets.swift -o .build/test-ping-buckets
 	.build/test-ping-buckets
+	swiftc -target "$$(uname -m)-apple-macosx14.0" Sources/WiFiMonitor/Services/UpdateService.swift scripts/test-updates.swift -o .build/test-updates
+	.build/test-updates
 
 MASKED_PNG = .build/AppIcon-masked.png
 
