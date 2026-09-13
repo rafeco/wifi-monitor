@@ -74,7 +74,7 @@ final class UpdateService {
         guard timer == nil else { return }
         Task { await check() }
         timer = Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { [weak self] _ in
-            Task { @MainActor in await self?.check() }
+            Task { @MainActor [weak self] in await self?.check() }
         }
     }
 

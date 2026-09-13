@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 
+@MainActor
 struct ContentView: View {
     @Environment(UpdateService.self) private var updateService
     @Environment(PingService.self) private var pingService
