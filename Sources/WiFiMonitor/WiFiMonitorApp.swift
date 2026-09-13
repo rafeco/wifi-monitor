@@ -3,6 +3,9 @@ import AppKit
 
 @main
 struct WiFiMonitorApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @Environment(\.openWindow) private var openWindow
+
     private static let repoURL = URL(string: "https://github.com/rafeco/wifi-monitor")!
     let pingService = PingService()
     let pingStore = PingStore()
@@ -13,8 +16,11 @@ struct WiFiMonitorApp: App {
     let profileStore = NetworkProfileStore()
 
     var body: some Scene {
-        WindowGroup {
+        WindowGroup(id: "main") {
             ContentView()
+                .onAppear {
+                    appDelegate.reopenMainWindow = { openWindow(id: "main") }
+                }
                 .environment(pingService)
                 .environment(pingStore)
                 .environment(routerService)
@@ -54,5 +60,18 @@ struct WiFiMonitorApp: App {
         )
         NSApplication.shared.orderFrontStandardAboutPanel(options: [.credits: credits])
         NSApplication.shared.activate(ignoringOtherApps: true)
+    }
+}
+
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    var reopenMainWindow: (() -> Void)?
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        // Let AppKit restore minimized windows instead of creating another one.
+        if sender.windows.contains(where: { $0.isMiniaturized }) { return true }
+        guard !flag, let reopenMainWindow else { return true }
+        reopenMainWindow()
+        return false
     }
 }
