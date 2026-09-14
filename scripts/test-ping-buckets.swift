@@ -8,7 +8,9 @@ struct PingChartBucketTests {
         tests.testMixedBucketMeasuresLossAndOnlySuccessfulLatency()
         tests.testOutageHasNoLatencyAndBreaksLine()
         tests.testMissingBucketsStayMissingAndBreakLine()
-        print("Packet-loss aggregation: all 3 tests passed")
+        tests.testConnectionNameValidation()
+        tests.testRateLimitBodyDecodesAsUnknownConnection()
+        print("Packet-loss aggregation: all 5 tests passed")
     }
 
     private func expectEqual<T: Equatable>(_ actual: T, _ expected: T) {
@@ -25,6 +27,10 @@ struct PingChartBucketTests {
 
     private func expectTrue(_ value: Bool) {
         precondition(value)
+    }
+
+    private func expectFalse(_ value: Bool) {
+        precondition(!value)
     }
 
     private let start = Date(timeIntervalSince1970: 1_700_006_400)
@@ -76,5 +82,40 @@ struct PingChartBucketTests {
         expectEqual(buckets[0].segment, buckets[1].segment)
         expectDifferent(buckets[1].segment, buckets[2].segment)
         expectTrue(PingChartBucket.aggregate([], calendar: calendar).isEmpty)
+    }
+
+    func testConnectionNameValidation() {
+        expectTrue(isPlausibleConnectionName("AS29852 Honest Networks, LLC"))
+        expectTrue(isPlausibleConnectionName("AS11351 Charter Communications Inc"))
+        // ipinfo.io answers a rate-limited lookup with a JSON error body.
+        expectFalse(isPlausibleConnectionName("{\n  \"status\": 429,\n  \"error\": {}\n}"))
+        expectFalse(isPlausibleConnectionName("<html>nope</html>"))
+        expectFalse(isPlausibleConnectionName("   "))
+        expectFalse(isPlausibleConnectionName(""))
+        expectFalse(isPlausibleConnectionName(String(repeating: "a", count: 101)))
+        expectFalse(isPlausibleConnectionName("AS1 Some ISP\nsecond line"))
+    }
+
+    func testRateLimitBodyDecodesAsUnknownConnection() {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+
+        // A record poisoned before the response was validated must read back as
+        // "unknown" rather than charting as its own connection.
+        let poisoned = PingRecord(latencyMs: 12, success: true, connection: "{\n  \"status\": 429\n}")
+        let roundTripped = try! decoder.decode(PingRecord.self, from: try! encoder.encode(poisoned))
+        expectNil(roundTripped.connection)
+        expectEqual(roundTripped.shortConnection, "Unknown")
+        expectEqual(roundTripped.latencyMs, 12)
+
+        let good = PingRecord(latencyMs: 8, success: true, connection: "AS29852 Honest Networks, LLC")
+        let goodTrip = try! decoder.decode(PingRecord.self, from: try! encoder.encode(good))
+        expectEqual(goodTrip.connection, "AS29852 Honest Networks, LLC")
+        expectEqual(goodTrip.shortConnection, "Honest Networks, LLC")
+
+        // A poisoned run between two real networks must not read as two switches.
+        expectEqual(networkChangeTimestamps(from: [roundTripped, goodTrip]).count, 0)
     }
 }

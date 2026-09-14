@@ -1,6 +1,18 @@
 import Foundation
 import SwiftUI
 
+/// ipinfo.io answers a rate-limited (HTTP 429) lookup with a JSON error body
+/// rather than an org string. Anything JSON-shaped, multi-line, or implausibly
+/// long is not an ISP name, so treat it as unknown instead of charting it as a
+/// distinct connection.
+func isPlausibleConnectionName(_ value: String) -> Bool {
+    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty, trimmed.count <= 100 else { return false }
+    if trimmed.contains(where: { $0.isNewline }) { return false }
+    if trimmed.hasPrefix("{") || trimmed.hasPrefix("[") || trimmed.hasPrefix("<") { return false }
+    return true
+}
+
 /// Strip the "ASXXXXX " prefix from org strings like "AS29852 Honest Networks, LLC"
 func shortConnectionName(_ connection: String?) -> String {
     guard let connection else { return "Unknown" }
@@ -44,6 +56,20 @@ struct PingRecord: Codable, Identifiable {
         self.success = success
         self.host = host
         self.connection = connection
+    }
+
+    /// Older files can hold a garbage connection string captured before the
+    /// ISP lookup validated its response (an ipinfo rate-limit body, say).
+    /// Drop those on read so the charts don't show them as a network.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        timestamp = try container.decode(Date.self, forKey: .timestamp)
+        latencyMs = try container.decodeIfPresent(Double.self, forKey: .latencyMs)
+        success = try container.decode(Bool.self, forKey: .success)
+        host = try container.decode(String.self, forKey: .host)
+        let rawConnection = try container.decodeIfPresent(String.self, forKey: .connection)
+        connection = rawConnection.flatMap { isPlausibleConnectionName($0) ? $0 : nil }
     }
 
     var shortConnection: String {
