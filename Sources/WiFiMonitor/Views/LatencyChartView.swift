@@ -26,6 +26,15 @@ struct LatencyChartView: View {
         networkChangeTimestamps(from: records)
     }
 
+    private var failedPingCount: Int {
+        records.lazy.filter { !$0.success }.count
+    }
+
+    private var dailyLossPercentage: Double {
+        guard !records.isEmpty else { return 0 }
+        return Double(failedPingCount) / Double(records.count) * 100
+    }
+
     var body: some View {
         if records.isEmpty {
             ContentUnavailableView(
@@ -107,9 +116,19 @@ struct LatencyChartView: View {
                 Label("Packet loss", systemImage: "exclamationmark.circle")
                     .font(.headline)
                     .padding(.top, 8)
-                Text("Failed pings per 5 minutes · Gaps mean no recorded pings")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 12) {
+                    Text("\(failedPingCount) of \(records.count) pings lost (\(dailyLossPercentage, format: .number.precision(.fractionLength(1)))%)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Label("0%", systemImage: "circle.fill")
+                        .foregroundStyle(.green)
+                    Label("Loss", systemImage: "rectangle.fill")
+                        .foregroundStyle(.red)
+                    Text("Blank = no pings")
+                        .foregroundStyle(.secondary)
+                }
+                .font(.caption2)
 
                 Chart {
                     ForEach(buckets) { bucket in
@@ -125,8 +144,8 @@ struct LatencyChartView: View {
                                 x: .value("Time", bucket.timestamp.addingTimeInterval(150)),
                                 y: .value("Packet loss", 0)
                             )
-                            .foregroundStyle(.secondary)
-                            .symbolSize(6)
+                            .foregroundStyle(.green)
+                            .symbolSize(14)
                         }
                     }
                     ForEach(networkChanges, id: \.self) { change in
@@ -144,7 +163,7 @@ struct LatencyChartView: View {
                     }
                 }
                 .chartYAxis {
-                    AxisMarks(values: [0, 50, 100]) { value in
+                    AxisMarks(values: [0, 25, 50, 75, 100]) { value in
                         AxisGridLine()
                         AxisValueLabel {
                             if let loss = value.as(Int.self) {
@@ -154,7 +173,7 @@ struct LatencyChartView: View {
                         }
                     }
                 }
-                .frame(height: 100)
+                .frame(height: 120)
             }
         }
     }

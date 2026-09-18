@@ -28,7 +28,7 @@ If you deny it, ping/latency and signal monitoring still work, but the network n
 
 Everything is displayed on a single scrollable page:
 
-**Connectivity** — Pings `1.1.1.1` every 30 seconds and charts latency and packet loss over a shared 24-hour timeline. Packet loss shows the percentage of failed pings in each five-minute interval; intervals with no successful pings leave a gap in latency, and intervals with no observations are not treated as zero loss. Detects which ISP you're connected to (via [ipinfo.io](https://ipinfo.io)) and color-codes the chart when your connection switches providers.
+**Connectivity** — Pings `1.1.1.1` every 30 seconds and charts latency and packet loss over a shared 24-hour timeline. Packet loss shows the percentage of failed pings in each five-minute interval; green dots mark observed intervals with no loss, while blank intervals mean no pings were recorded. Intervals with no successful pings leave a gap in latency, and intervals with no observations are not treated as zero loss. The WiFi signal chart follows the same gap convention instead of connecting measurements across missing intervals. Detects which ISP you're connected to (via [ipinfo.io](https://ipinfo.io)) and color-codes the chart when your connection switches providers.
 
 **WiFi Signal** — Monitors WiFi signal strength (RSSI), noise floor, SNR, transmit rate, channel, and band via CoreWLAN every 30 seconds. Charts RSSI over time with color-coded quality zones (green/yellow/red).
 

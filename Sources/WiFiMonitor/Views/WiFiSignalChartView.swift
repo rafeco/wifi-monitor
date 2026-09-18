@@ -2,11 +2,12 @@ import SwiftUI
 import Charts
 
 struct WiFiSignalBucket: Identifiable {
-    let id = UUID()
+    var id: Date { timestamp }
     let timestamp: Date
     let avgRssi: Double
     let avgSnr: Double
     let avgTxRate: Double
+    let segment: Int
 }
 
 struct WiFiSignalChartView: View {
@@ -34,12 +35,27 @@ struct WiFiSignalChartView: View {
                 hour: comps.hour, minute: roundedMinute
             ))!
         }
-        return grouped.map { (timestamp, snaps) in
+        var segment = 0
+        var previousTimestamp: Date?
+        return grouped.keys.sorted().map { timestamp in
+            let snaps = grouped[timestamp]!
             let avgRssi = snaps.map { Double($0.rssi) }.reduce(0, +) / Double(snaps.count)
             let avgSnr = snaps.map { Double($0.snr) }.reduce(0, +) / Double(snaps.count)
             let avgTxRate = snaps.map(\.txRate).reduce(0, +) / Double(snaps.count)
-            return WiFiSignalBucket(timestamp: timestamp, avgRssi: avgRssi, avgSnr: avgSnr, avgTxRate: avgTxRate)
-        }.sorted { $0.timestamp < $1.timestamp }
+            // Match the latency chart: an unobserved five-minute interval is a
+            // real gap, not a straight line between measurements hours apart.
+            if previousTimestamp.map({ timestamp.timeIntervalSince($0) > 300 }) == true {
+                segment += 1
+            }
+            previousTimestamp = timestamp
+            return WiFiSignalBucket(
+                timestamp: timestamp,
+                avgRssi: avgRssi,
+                avgSnr: avgSnr,
+                avgTxRate: avgTxRate,
+                segment: segment
+            )
+        }
     }
 
     var body: some View {
@@ -69,10 +85,18 @@ struct WiFiSignalChartView: View {
                     ForEach(buckets) { bucket in
                         LineMark(
                             x: .value("Time", bucket.timestamp),
-                            y: .value("RSSI", bucket.avgRssi)
+                            y: .value("RSSI", bucket.avgRssi),
+                            series: .value("Segment", bucket.segment)
                         )
                         .foregroundStyle(.blue)
                         .lineStyle(StrokeStyle(lineWidth: 2))
+
+                        PointMark(
+                            x: .value("Time", bucket.timestamp),
+                            y: .value("RSSI", bucket.avgRssi)
+                        )
+                        .foregroundStyle(.blue)
+                        .symbolSize(8)
                     }
 
                     ForEach(networkChanges, id: \.self) { change in
