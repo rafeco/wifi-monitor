@@ -40,6 +40,10 @@ Everything is displayed on a single scrollable page:
 
 **Status bar** — Shows current ping latency, ISP provider, WiFi network name, band (2.4/5/6 GHz), signal strength, and — on a mesh — the connected node, plus the prominent "feels like" weather rating and uptime percentage.
 
+**Active interface** — Shows whether the route to the latency monitor’s destination (`1.1.1.1`) uses Ethernet, Wi-Fi, or another interface. Updates when macOS reports a path change and checks the route every five seconds. When Ethernet carries the measurements, connected Wi-Fi is labeled inactive; its signal history continues recording, but weak Wi-Fi is excluded from the current health diagnosis. Tunnel routes display their interface name, and unavailable route information is shown as unknown. Other destinations can use different routes, especially with a VPN.
+
+The running Dock icon adds a prominent white **<•••>** Ethernet badge beneath the Wi-Fi arcs while the monitored route is wired. It disappears when the route changes back to Wi-Fi or another interface. The Wi-Fi arcs still change color with network health; the installed app icon stays the same.
+
 ## Router setup (ASUS only)
 
 Router monitoring is optional and works **only with ASUS routers running ASUSWRT firmware** (tested with RT-AX58U / RT-AX3000 and a ZenWiFi XT8 AiMesh). Everything else in the app works with any router.
@@ -100,6 +104,7 @@ Sources/WiFiMonitor/
 │   ├── PingService.swift             # 30s ping timer + ISP detection via ipinfo.io
 │   ├── PingStore.swift               # JSON persistence for ping data
 │   ├── WiFiService.swift             # 30s WiFi + SSID sampling, network-change detection
+│   ├── ActiveConnectionService.swift # Live route/interface detection for the ping destination
 │   ├── RouterService.swift           # ASUS router HTTP API client + 60s polling + probe + AiMesh node
 │   ├── RouterStore.swift             # JSON persistence for router data
 │   ├── LocationPermission.swift      # Requests Location access (needed to read SSID)

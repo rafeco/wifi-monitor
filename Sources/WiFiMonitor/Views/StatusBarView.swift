@@ -5,6 +5,7 @@ struct StatusBarView: View {
     @Environment(PingService.self) private var pingService
     @Environment(PingStore.self) private var pingStore
     @Environment(WiFiService.self) private var wifiService
+    @Environment(ActiveConnectionService.self) private var activeConnectionService
     @Environment(RouterService.self) private var routerService
 
     private var records: [PingRecord] {
@@ -42,6 +43,7 @@ struct StatusBarView: View {
             // Everything else, arranged cleanly on the right.
             VStack(alignment: .trailing, spacing: 4) {
                 pingRow
+                connectionRow
                 if wifiService.lastSnapshot != nil { wifiRow }
                 statsRow
             }
@@ -74,12 +76,24 @@ struct StatusBarView: View {
         }
     }
 
+    private var connectionRow: some View {
+        let connection = activeConnectionService.connection
+        return Label(connection.label, systemImage: connection.symbol)
+            .font(.caption.weight(.medium))
+            .help("Interface used to reach 1.1.1.1 (the latency monitor’s destination)\(connection.interfaceName.map { ": \($0)" } ?? ""). Other destinations may use different routes, especially with a VPN.")
+    }
+
     @ViewBuilder
     private var wifiRow: some View {
         if let snap = wifiService.lastSnapshot {
             HStack(spacing: 6) {
                 Image(systemName: "wifi")
-                    .foregroundStyle(signalColor)
+                    .foregroundStyle(activeConnectionService.connection.wifiIsInactive ? Color.secondary : signalColor)
+                if activeConnectionService.connection.wifiIsInactive {
+                    Text("Connected · inactive")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 if let ssid = wifiService.currentSSID {
                     Text(ssid)
                         .font(.caption.weight(.medium))
@@ -94,7 +108,7 @@ struct StatusBarView: View {
                 Text(snap.signalQuality)
                     .font(.caption)
                     .foregroundStyle(signalColor)
-                if let node = routerService.connectedNode {
+                if !activeConnectionService.connection.wifiIsInactive, let node = routerService.connectedNode {
                     Image(systemName: "wifi.router")
                         .foregroundStyle(.secondary)
                     Text(node)
@@ -126,6 +140,7 @@ struct StatusBarView: View {
 struct FeelsLikeView: View {
     @Environment(PingStore.self) private var pingStore
     @Environment(WiFiService.self) private var wifiService
+    @Environment(ActiveConnectionService.self) private var activeConnectionService
     @Environment(RouterService.self) private var routerService
     @AppStorage("routerEnabled") private var routerEnabled = true
 
@@ -156,7 +171,7 @@ struct FeelsLikeView: View {
 
         return FeelsLikeScore.compute(
             recentPings: recent,
-            wifi: wifiService.lastSnapshot,
+            wifi: activeConnectionService.connection.transport == .wifi ? wifiService.lastSnapshot : nil,
             wanConnected: wanConnected,
             throughputBytesPerSec: throughput,
             peakThroughputBytesPerSec: peakThroughput
@@ -183,10 +198,13 @@ struct FeelsLikeView: View {
         }
         .help("Network feels-like score: \(s.score)/100")
         .onAppear {
-            DockIconController.update(for: s.rating)
+            DockIconController.update(for: s.rating, isWired: activeConnectionService.connection.transport == .ethernet)
         }
         .onChange(of: s.rating) { _, rating in
-            DockIconController.update(for: rating)
+            DockIconController.update(for: rating, isWired: activeConnectionService.connection.transport == .ethernet)
+        }
+        .onChange(of: activeConnectionService.connection.transport) { _, transport in
+            DockIconController.update(for: s.rating, isWired: transport == .ethernet)
         }
     }
 }

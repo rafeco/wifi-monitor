@@ -77,11 +77,17 @@ final class WiFiService {
     }
 
     private func sample() {
-        guard let iface = CWWiFiClient.shared().interface() else { return }
+        guard let iface = CWWiFiClient.shared().interface() else {
+            lastSnapshot = nil
+            return
+        }
 
         let rssi = iface.rssiValue()
         // 0 dBm means the interface has no valid reading (e.g., momentary disconnection)
-        guard rssi != 0 else { return }
+        guard rssi != 0 else {
+            lastSnapshot = nil
+            return
+        }
         let noise = iface.noiseMeasurement()
         let txRate = iface.transmitRate()
         let channel = iface.wlanChannel()?.channelNumber ?? 0

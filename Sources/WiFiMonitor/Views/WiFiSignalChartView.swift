@@ -13,6 +13,7 @@ struct WiFiSignalBucket: Identifiable {
 struct WiFiSignalChartView: View {
     let selectedDate: Date
     @Environment(WiFiStore.self) private var wifiStore
+    @Environment(ActiveConnectionService.self) private var activeConnectionService
     @Environment(PingStore.self) private var pingStore
 
     private var snapshots: [WiFiSnapshot] {
@@ -79,6 +80,12 @@ struct WiFiSignalChartView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
+                }
+
+                if Calendar.current.isDateInToday(selectedDate), activeConnectionService.connection.wifiIsInactive {
+                    Text("Wi-Fi signal is still recorded while connected. Current latency measurements use \(activeConnectionService.connection.transport == .ethernet ? "Ethernet" : "another interface").")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 Chart {

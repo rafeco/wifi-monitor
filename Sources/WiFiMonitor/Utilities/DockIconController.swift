@@ -1,36 +1,81 @@
 import AppKit
 
 /// Keeps the installed app icon unchanged, but tints the WiFi arcs in the
-/// running Dock icon when the current connection is degraded.
+/// running Dock icon when the current connection is degraded, and adds a
+/// prominent Ethernet badge while the monitored route uses a wired interface.
 @MainActor
 enum DockIconController {
     private static var originalIcon: NSImage?
-    private static var tintedIcons: [FeelsLikeScore.Rating: NSImage] = [:]
-    private static var currentRating: FeelsLikeScore.Rating?
+    private struct Appearance: Hashable {
+        let rating: FeelsLikeScore.Rating
+        let isWired: Bool
+    }
+    private static var icons: [Appearance: NSImage] = [:]
+    private static var currentAppearance: Appearance?
 
-    static func update(for rating: FeelsLikeScore.Rating) {
-        guard rating != currentRating else { return }
+    static func update(for rating: FeelsLikeScore.Rating, isWired: Bool) {
+        let appearance = Appearance(rating: rating, isWired: isWired)
+        guard appearance != currentAppearance else { return }
 
         if originalIcon == nil {
             originalIcon = NSApplication.shared.applicationIconImage.copy() as? NSImage
         }
         guard let originalIcon else { return }
 
-        switch rating {
-        case .smooth:
-            NSApplication.shared.applicationIconImage = originalIcon
-        case .usable, .rough, .down:
-            let icon = tintedIcons[rating] ?? makeTintedIcon(
-                from: originalIcon,
-                color: color(for: rating)
-            )
-            if let icon {
-                tintedIcons[rating] = icon
-                NSApplication.shared.applicationIconImage = icon
-            }
-        }
+        guard let icon = icons[appearance] ?? makeIcon(from: originalIcon, rating: rating, isWired: isWired) else { return }
+        icons[appearance] = icon
+        NSApplication.shared.applicationIconImage = icon
 
-        currentRating = rating
+        currentAppearance = appearance
+    }
+
+    /// Shares the production renderer with the preview script.
+    static func makeIcon(from image: NSImage, rating: FeelsLikeScore.Rating, isWired: Bool) -> NSImage? {
+        let base: NSImage
+        if rating == .smooth {
+            base = image
+        } else {
+            guard let tinted = makeTintedIcon(from: image, color: color(for: rating)) else { return nil }
+            base = tinted
+        }
+        guard isWired else { return base }
+
+        // Draw the <•••> badge as vectors so it stays crisp at every Dock size.
+        return NSImage(size: image.size, flipped: false) { rect in
+            base.draw(in: rect)
+            // Center the badge beneath the arcs, covering the original dot.
+            // The wide white capsule remains recognizable at a 32-point Dock size.
+            let badge = NSRect(x: rect.width * 0.19, y: rect.height * 0.06,
+                               width: rect.width * 0.62, height: rect.height * 0.27)
+            let pill = NSBezierPath(roundedRect: badge, xRadius: badge.height / 2, yRadius: badge.height / 2)
+            NSColor.white.setFill()
+            pill.fill()
+            let ink = NSColor(calibratedRed: 0.02, green: 0.10, blue: 0.24, alpha: 1)
+            ink.setStroke()
+            pill.lineWidth = rect.width * 0.008
+            pill.stroke()
+
+            let brackets = NSBezierPath()
+            brackets.lineWidth = badge.height * 0.13
+            brackets.lineCapStyle = .round
+            brackets.lineJoinStyle = .round
+            for right in [false, true] {
+                let innerX = badge.minX + badge.width * (right ? 0.78 : 0.22)
+                let outerX = badge.minX + badge.width * (right ? 0.88 : 0.12)
+                brackets.move(to: NSPoint(x: innerX, y: badge.minY + badge.height * 0.72))
+                brackets.line(to: NSPoint(x: outerX, y: badge.midY))
+                brackets.line(to: NSPoint(x: innerX, y: badge.minY + badge.height * 0.28))
+            }
+            brackets.stroke()
+            ink.setFill()
+            let diameter = badge.height * 0.18
+            for position in [0.36, 0.50, 0.64] {
+                NSBezierPath(ovalIn: NSRect(x: badge.minX + badge.width * position - diameter / 2,
+                                           y: badge.midY - diameter / 2,
+                                           width: diameter, height: diameter)).fill()
+            }
+            return true
+        }
     }
 
     private static func color(for rating: FeelsLikeScore.Rating) -> NSColor {

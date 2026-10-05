@@ -13,6 +13,7 @@ struct WiFiMonitorApp: App {
     let routerService = RouterService()
     let routerStore = RouterStore()
     let wifiService = WiFiService()
+    let activeConnectionService = ActiveConnectionService()
     let wifiStore = WiFiStore()
     let profileStore = NetworkProfileStore()
 
@@ -29,6 +30,7 @@ struct WiFiMonitorApp: App {
                 .environment(routerService)
                 .environment(routerStore)
                 .environment(wifiService)
+                .environment(activeConnectionService)
                 .environment(wifiStore)
                 .environment(profileStore)
         }

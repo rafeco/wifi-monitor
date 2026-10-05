@@ -9,6 +9,7 @@ struct ContentView: View {
     @Environment(RouterService.self) private var routerService
     @Environment(RouterStore.self) private var routerStore
     @Environment(WiFiService.self) private var wifiService
+    @Environment(ActiveConnectionService.self) private var activeConnectionService
     @Environment(WiFiStore.self) private var wifiStore
     @Environment(NetworkProfileStore.self) private var profileStore
     @State private var selectedDate = Date()
@@ -117,6 +118,7 @@ struct ContentView: View {
         // While collapsed, keep the window fitted to the bar as its size changes.
         .onChange(of: barSize) { _, _ in if collapsed { applyWindowSize() } }
         .onAppear {
+            activeConnectionService.start()
             pingService.start(store: pingStore)
             wifiService.start(store: wifiStore)
             // Always poll; RouterService itself decides per-network whether
